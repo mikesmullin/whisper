@@ -1,0 +1,60 @@
+# Whisper Voice Keyboard Configuration
+# Place this file at ~/.whisper.yaml to customize settings
+
+audio:
+  # Sample rate for audio capture (Hz)
+  sample_rate: 16000
+  
+  # Microphone device index (null for auto-detect)
+  # Find device IDs: python -c "import sounddevice; print(sounddevice.query_devices())"
+  mic_device: null
+  
+  # Minimum duration of utterance to transcribe (seconds)
+  min_utterance_duration: 1.5
+  
+  # Number of silent chunks before ending utterance
+  silence_chunks: 15
+
+shortcuts:
+  # Keyboard shortcuts to toggle listening on/off
+  # Format: "modifier+key" (e.g., "ctrl+shift+space", "alt+v")
+  toggle_on: "ctrl+shift+space"
+  toggle_off: "ctrl+shift+space"
+
+word_mappings:
+  # Map spoken words to keyboard output
+  # When you say these words, they'll be replaced with the specified text
+  
+  # Line breaks
+  ENTER: "\n"
+  enter: "\n"
+  new line: "\n"
+  
+  # Formatting
+  bullet: "\n - "
+  bullet point: "\n - "
+  tab: "\t"
+  TAB: "\t"
+  
+  # Add your own custom mappings below:
+  # period: "."
+  # comma: ","
+  # question mark: "?"
+  # new paragraph: "\n\n"
+  # code block: "\n```\n"
+  # arrow: " -> "
+  # my email: "your.email@example.com"
+
+notifications:
+  # Enable/disable system notifications
+  enabled: true
+  
+  # Show notification when app starts
+  show_on_start: true
+  
+  # Show notification when toggling listening on/off
+  show_on_toggle: true
+
+system_tray:
+  # Enable/disable system tray icon
+  enabled: true

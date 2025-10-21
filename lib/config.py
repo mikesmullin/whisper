@@ -34,12 +34,12 @@ DEFAULT_CONFIG = {
         "colon": ":",
         "semicolon": ";",
         # Hotkeys (will be executed as keyboard shortcuts)
-        "undo": "ctrl+z",
-        "redo": "ctrl+y",
-        "copy": "ctrl+c",
-        "paste": "ctrl+v",
-        "cut": "ctrl+x",
-        "save": "ctrl+s",
+        "now undo": "ctrl+z",
+        "now redo": "ctrl+y",
+        "now copy": "ctrl+c",
+        "now paste": "ctrl+v",
+        "now cut": "ctrl+x",
+        "now save": "ctrl+s",
     },
     "notifications": {
         "enabled": True,

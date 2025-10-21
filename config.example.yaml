@@ -24,9 +24,9 @@ shortcuts:
 word_mappings:
   # Map spoken words to keyboard output
   # When you say these words, they'll be replaced with the specified text
+  # All mappings are case-insensitive
   
   # Line breaks
-  ENTER: "\n"
   enter: "\n"
   new line: "\n"
   
@@ -34,12 +34,17 @@ word_mappings:
   bullet: "\n - "
   bullet point: "\n - "
   tab: "\t"
-  TAB: "\t"
+  
+  # Punctuation (say these to insert punctuation)
+  period: "."
+  dot: "."
+  comma: ","
+  question mark: "?"
+  exclamation point: "!"
+  colon: ":"
+  semicolon: ";"
   
   # Add your own custom mappings below:
-  # period: "."
-  # comma: ","
-  # question mark: "?"
   # new paragraph: "\n\n"
   # code block: "\n```\n"
   # arrow: " -> "

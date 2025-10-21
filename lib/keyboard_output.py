@@ -3,6 +3,7 @@ Keyboard output for typing transcriptions
 """
 
 import logging
+import re
 import time
 from typing import Dict, Optional
 from pynput.keyboard import Controller, Key
@@ -24,6 +25,8 @@ class KeyboardTyper:
         self.word_mappings = word_mappings or {}
         
         logger.info(f"Keyboard typer initialized with {len(self.word_mappings)} word mappings")
+        for word, replacement in self.word_mappings.items():
+            logger.debug(f"  Mapping: {repr(word)} -> {repr(replacement)}")
     
     def type_text(self, text: str, delay: float = 0.01):
         """
@@ -36,8 +39,12 @@ class KeyboardTyper:
         if not text:
             return
         
+        logger.debug(f"Original text: {repr(text)}")
+        
         # Process text and apply word mappings
         processed_text = self._apply_word_mappings(text)
+        
+        logger.debug(f"Processed text: {repr(processed_text)}")
         
         # Type the processed text
         try:
@@ -46,7 +53,7 @@ class KeyboardTyper:
                 if delay > 0:
                     time.sleep(delay)
             
-            logger.debug(f"Typed: {text[:50]}{'...' if len(text) > 50 else ''}")
+            logger.info(f"Typed: {processed_text[:50]}{'...' if len(processed_text) > 50 else ''}")
         
         except Exception as e:
             logger.error(f"Error typing text: {e}")
@@ -64,24 +71,24 @@ class KeyboardTyper:
         if not self.word_mappings:
             return text
         
+        # First, strip trailing period if it exists (unless "period" or "dot" is in the mapping)
+        # This removes auto-added periods from Whisper
+        has_period_mapping = any(word.lower() in ['period', 'dot'] for word in self.word_mappings.keys())
+        if not has_period_mapping:
+            # Remove trailing period that Whisper adds
+            text = re.sub(r'\.\s*$', '', text)
+        
         # Replace mapped words
         result = text
         for word, replacement in self.word_mappings.items():
-            # Try to match whole words (with spaces around them)
-            # Also match at start/end of string
-            result = result.replace(f" {word} ", f" {replacement} ")
-            result = result.replace(f" {word}.", f" {replacement}.")
-            result = result.replace(f" {word},", f" {replacement},")
-            
-            # Handle case where word is at the start or end
-            if result.startswith(f"{word} "):
-                result = f"{replacement} " + result[len(word) + 1:]
-            if result.endswith(f" {word}"):
-                result = result[:-len(word) - 1] + f" {replacement}"
-            
-            # Exact match
-            if result == word:
-                result = replacement
+            # Create a regex pattern that matches the word with optional punctuation
+            # Match word with trailing punctuation (comma, period, etc.) or whitespace
+            pattern = rf'\b{re.escape(word)}[,.\s]*'
+            # Replace with the mapped value (no space added, the replacement itself controls formatting)
+            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+        
+        # Clean up any double spaces
+        result = re.sub(r' +', ' ', result)
         
         return result
     

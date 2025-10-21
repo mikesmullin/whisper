@@ -23,13 +23,16 @@ DEFAULT_CONFIG = {
         "toggle_off": "ctrl+shift+space",  # Same key toggles on/off
     },
     "word_mappings": {
-        "ENTER": "\n",
-        "enter": "\n",
         "new line": "\n",
-        "bullet": "\n - ",
-        "bullet point": "\n - ",
-        "tab": "\t",
-        "TAB": "\t",
+        "insert bullet": "\n - ",
+        "tab complete": "\t",
+        "end of sentence": ".",
+        "dot": ".",
+        "comma": ",",
+        "question mark": "?",
+        "exclamation point": "!",
+        "colon": ":",
+        "semicolon": ";",
     },
     "notifications": {
         "enabled": True,

@@ -31,7 +31,7 @@ word_mappings:
   
   # Formatting
   insert bullet: "- "
-  tab complete: "\t"
+  completion: "\t"
   
   # Punctuation (say these to insert punctuation)
   end of sentence: "."
@@ -49,6 +49,9 @@ word_mappings:
   now paste: "ctrl+v"
   now cut: "ctrl+x"
   now save: "ctrl+s"
+
+  # Programs
+  demon: "d "
   
   # Add your own custom mappings below:
   # new paragraph: "\n\n"

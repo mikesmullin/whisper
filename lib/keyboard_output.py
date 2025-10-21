@@ -77,65 +77,55 @@ class KeyboardTyper:
         if not self.word_mappings:
             return [text]
         
-        # First, strip trailing period if it exists (unless "period" or "dot" is in the mapping)
-        # This removes auto-added periods from Whisper
-        has_period_mapping = any(word.lower() in ['period', 'dot'] for word in self.word_mappings.keys())
-        if not has_period_mapping:
-            # Remove trailing period that Whisper adds
-            text = re.sub(r'\.\s*$', '', text)
-        
-        # Build a list of items (text segments and hotkey commands) to process
-        items = []
-        remaining_text = text
+        # Always strip trailing period - Whisper adds them automatically
+        # Users can explicitly say "end of sentence" or "dot" to add periods
+        text = re.sub(r'\.\s*$', '', text)
         
         # Sort mappings by length (longest first) to avoid partial matches
         sorted_mappings = sorted(self.word_mappings.items(), key=lambda x: len(x[0]), reverse=True)
         
-        while remaining_text:
-            matched = False
+        # Build a pattern that matches any of the mapped words
+        # We'll use a marker to track replacements
+        replacements = {}
+        marker_counter = 0
+        result_text = text
+        
+        for word, replacement in sorted_mappings:
+            # Match word with optional trailing punctuation/whitespace
+            pattern = rf'\b{re.escape(word)}\b[,.\s]*'
             
-            for word, replacement in sorted_mappings:
-                # Match word with optional trailing punctuation
-                pattern = rf'^(.*?)\b{re.escape(word)}\b[,.\s]*(.*)$'
-                match = re.search(pattern, remaining_text, flags=re.IGNORECASE)
+            def replace_func(match):
+                nonlocal marker_counter
+                marker = f"<<<MARKER_{marker_counter}>>>"
+                replacements[marker] = replacement
+                marker_counter += 1
+                return marker
+            
+            result_text = re.sub(pattern, replace_func, result_text, flags=re.IGNORECASE)
+        
+        # Now split the result by markers and build the final list
+        items = []
+        parts = re.split(r'(<<<MARKER_\d+>>>)', result_text)
+        
+        for part in parts:
+            if part.startswith('<<<MARKER_'):
+                # This is a marker - replace with actual value
+                replacement = replacements.get(part, '')
                 
-                if match:
-                    before, after = match.groups()
-                    
-                    # Add text before the match
-                    if before.strip():
-                        items.append(before)
-                    
-                    # Check if replacement is a hotkey (format: "ctrl+z")
-                    if '+' in replacement and len(replacement) < 20:
-                        # Likely a hotkey
-                        items.append({'hotkey': replacement})
-                    else:
-                        # Regular text replacement
-                        items.append(replacement)
-                    
-                    remaining_text = after
-                    matched = True
-                    break
-            
-            if not matched:
-                # No more matches, add remaining text
-                if remaining_text.strip():
-                    items.append(remaining_text)
-                break
-        
-        # Clean up: merge adjacent text items and remove empty items
-        merged_items = []
-        for item in items:
-            if isinstance(item, dict):
-                merged_items.append(item)
-            elif item.strip():
-                if merged_items and isinstance(merged_items[-1], str):
-                    merged_items[-1] += item
+                # Check if replacement is a hotkey (format: "ctrl+z")
+                if '+' in replacement and len(replacement) < 20:
+                    # Likely a hotkey
+                    items.append({'hotkey': replacement})
                 else:
-                    merged_items.append(item)
+                    # Regular text replacement
+                    if replacement:
+                        items.append(replacement)
+            else:
+                # Regular text
+                if part.strip():
+                    items.append(part)
         
-        return merged_items if merged_items else [text]
+        return items if items else [text]
     
     def _execute_hotkey(self, hotkey_str: str):
         """

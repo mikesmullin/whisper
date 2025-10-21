@@ -25,7 +25,7 @@ DEFAULT_CONFIG = {
     "word_mappings": {
         "new line": "\n",
         "insert bullet": "- ",
-        "tab complete": "\t",
+        "completion": "\t",
         "end of sentence": ".",
         "dot": ".",
         "comma": ",",

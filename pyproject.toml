@@ -20,10 +20,14 @@ version = "0.1.0"
 
 dependencies = [
   "torch>=2.0.0",
+  "torchaudio>=2.0.0",
   "numpy>=1.24.0",
   "sounddevice>=0.4.6",
-  "pyaudiowpatch>=0.2.12.3",
   "faster-whisper>=0.10.0",
+  "pynput>=1.7.6",
+  "pystray>=0.19.5",
+  "pillow>=10.0.0",
+  "pyyaml>=6.0.0",
 ]
 
 [project.scripts]

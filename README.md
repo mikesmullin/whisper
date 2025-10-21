@@ -33,10 +33,67 @@ A cross-platform voice keyboard that transcribes your speech into typed text in 
 Using `uv` (fast Python package installer):
 
 ```bash
-uv tool install --editable . --with pynput --with pystray --with pillow --with pyyaml --with numpy --with torch --with torchaudio --with sounddevice --with faster-whisper
+# Clone the repository
+git clone https://github.com/mikesmullin/whisper.git
+cd whisper
+
+# Install using uv
+uv tool install --editable .
 ```
 
-This installs the `whisper` command globally on your system.
+This installs the `whisper` command globally on your system with all required dependencies.
+
+### Alternative Installation Methods
+
+**Using pip:**
+```bash
+# Clone the repository
+git clone https://github.com/mikesmullin/whisper.git
+cd whisper
+
+# Install with pip
+pip install -e .
+```
+
+**For development (with all dependencies):**
+```bash
+pip install -e . -r requirements.txt
+```
+
+### macOS-Specific Setup
+
+**CRITICAL**: On macOS, you **MUST** grant microphone and accessibility permissions or the app will not work:
+
+#### Step 1: Grant Microphone Permission (Required)
+
+Without this, the microphone will register zero audio.
+
+1. Open **System Settings** (or System Preferences on older macOS)
+2. Go to **Privacy & Security** → **Microphone**
+3. Find and enable your terminal app (Terminal, iTerm2, etc.)
+4. **Important**: You may need to **restart your terminal** after granting permission
+
+#### Step 2: Grant Accessibility Permission (Required for keyboard typing & hotkeys)
+
+Without this, whisper won't be able to type text or use global hotkeys.
+
+1. Open **System Settings**
+2. Go to **Privacy & Security** → **Accessibility**
+3. Find your terminal application in the list (Terminal, iTerm2, Visual Studio Code, etc.)
+4. **Enable** the checkbox next to it
+5. **IMPORTANT**: Completely quit and restart your terminal (Cmd+Q, then relaunch)
+
+#### Step 3: Test Installation
+
+```bash
+whisper --generate-config
+whisper --headless --verbose
+# Press Ctrl+Shift+Space to toggle listening
+# Speak something
+# Press Ctrl+C to quit
+```
+
+**Note**: If you encounter any dependency issues, all dependencies are automatically managed by `uv tool install` and run in an isolated environment.
 
 ## 📖 Usage
 
@@ -175,6 +232,34 @@ whisper --mic 1
 - Check microphone permissions in system settings
 - Try specifying device ID with `--mic N`
 - List devices: `python -c "import sounddevice; print(sounddevice.query_devices())"`
+
+### macOS-Specific Issues
+
+**No Audio / Zero Transcriptions:**
+- **Most common issue**: Microphone permissions not granted
+- Go to System Settings → Privacy & Security → Microphone
+- Enable your terminal application
+- **Restart your terminal completely** after granting permission
+- Test with the verification command in the setup section above
+
+**Permission Denied (Microphone Access):**
+- Go to System Settings → Privacy & Security → Microphone
+- Grant permission to Terminal or your terminal application
+- Restart the terminal and try again
+
+**Global Hotkeys Not Working on macOS:**
+- Grant Accessibility permissions to your terminal application:
+  - Go to System Settings → Privacy & Security → Privacy → Accessibility
+  - Add your terminal application to the list
+- Try changing the hotkey combination in `~/.whisper.yaml`
+
+**Installation Issues:**
+- If you get dependency conflicts, try using a virtual environment:
+  ```bash
+  python -m venv whisper-env
+  source whisper-env/bin/activate
+  pip install -e .
+  ```
 
 ### Hotkeys Not Working
 - Some desktop environments may conflict with global hotkeys

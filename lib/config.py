@@ -15,7 +15,7 @@ DEFAULT_CONFIG = {
     "audio": {
         "sample_rate": 16000,
         "mic_device": None,  # Auto-detect if None
-        "min_utterance_duration": 1.5,  # seconds
+        "min_utterance_duration": 0.8,  # seconds
         "silence_chunks": 15,
     },
     "shortcuts": {
@@ -24,7 +24,7 @@ DEFAULT_CONFIG = {
     },
     "word_mappings": {
         "new line": "\n",
-        "insert bullet": "\n - ",
+        "insert bullet": "- ",
         "tab complete": "\t",
         "end of sentence": ".",
         "dot": ".",
@@ -33,6 +33,13 @@ DEFAULT_CONFIG = {
         "exclamation point": "!",
         "colon": ":",
         "semicolon": ";",
+        # Hotkeys (will be executed as keyboard shortcuts)
+        "undo": "ctrl+z",
+        "redo": "ctrl+y",
+        "copy": "ctrl+c",
+        "paste": "ctrl+v",
+        "cut": "ctrl+x",
+        "save": "ctrl+s",
     },
     "notifications": {
         "enabled": True,

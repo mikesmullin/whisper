@@ -10,7 +10,7 @@ audio:
   mic_device: null
   
   # Minimum duration of utterance to transcribe (seconds)
-  min_utterance_duration: 1.5
+  min_utterance_duration: 0.8
   
   # Number of silent chunks before ending utterance
   silence_chunks: 15
@@ -27,16 +27,14 @@ word_mappings:
   # All mappings are case-insensitive
   
   # Line breaks
-  enter: "\n"
   new line: "\n"
   
   # Formatting
-  bullet: "\n - "
-  bullet point: "\n - "
-  tab: "\t"
+  insert bullet: "- "
+  tab complete: "\t"
   
   # Punctuation (say these to insert punctuation)
-  period: "."
+  end of sentence: "."
   dot: "."
   comma: ","
   question mark: "?"
@@ -44,10 +42,18 @@ word_mappings:
   colon: ":"
   semicolon: ";"
   
+  # Hotkeys (execute keyboard shortcuts)
+  undo: "ctrl+z"
+  redo: "ctrl+y"
+  copy: "ctrl+c"
+  paste: "ctrl+v"
+  cut: "ctrl+x"
+  save: "ctrl+s"
+  
   # Add your own custom mappings below:
   # new paragraph: "\n\n"
-  # code block: "\n```\n"
-  # arrow: " -> "
+  # select all: "ctrl+a"
+  # find: "ctrl+f"
   # my email: "your.email@example.com"
 
 notifications:

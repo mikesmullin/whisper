@@ -110,15 +110,21 @@ class VoiceKeyboard:
         try:
             toggle_key = self.config.toggle_on_shortcut
             
-            # Parse hotkey string (e.g., "ctrl+shift+space")
-            def on_activate():
-                self.toggle_listening()
+            # Convert from "ctrl+shift+space" to "<ctrl>+<shift>+<space>" format for pynput
+            # pynput requires angle brackets around each key
+            pynput_format = '+'.join(f'<{key}>' for key in toggle_key.split('+'))
+            
+            logger.info(f"Registering hotkey: {toggle_key} -> {pynput_format}")
             
             # Use pynput's global hotkey listener
             from pynput.keyboard import GlobalHotKeys
             
+            def on_activate():
+                logger.info("Hotkey activated!")
+                self.toggle_listening()
+            
             hotkeys = {
-                toggle_key: on_activate
+                pynput_format: on_activate
             }
             
             self.hotkey_listener = GlobalHotKeys(hotkeys)
@@ -127,7 +133,10 @@ class VoiceKeyboard:
             print(f"✓ Hotkey registered: {toggle_key}")
         
         except Exception as e:
-            logger.warning(f"Failed to register hotkey: {e}")
+            import traceback
+            logger.error(f"Failed to register hotkey: {e}")
+            logger.error(traceback.format_exc())
+            logger.warning("You can still toggle listening using the system tray menu")
             self.hotkey_listener = None
     
     def toggle_listening(self):

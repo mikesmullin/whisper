@@ -1,4 +1,4 @@
-# �️ Whisper Voice Keyboard
+# 👄 Whisper
 
 A cross-platform voice keyboard that transcribes your speech into typed text in real-time. Speak naturally and watch your words appear on screen!
 

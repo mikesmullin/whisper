@@ -41,24 +41,30 @@ class KeyboardTyper:
         
         logger.debug(f"Original text: {repr(text)}")
         
-        # Process text and apply word mappings
-        processed_text = self._apply_word_mappings(text)
+        # Process text and apply word mappings (returns list of strings or hotkey commands)
+        processed_items = self._apply_word_mappings(text)
         
-        logger.debug(f"Processed text: {repr(processed_text)}")
+        logger.debug(f"Processed items: {repr(processed_items)}")
         
-        # Type the processed text
+        # Type the processed text or execute hotkeys
         try:
-            for char in processed_text:
-                self._type_char(char)
-                if delay > 0:
-                    time.sleep(delay)
+            for item in processed_items:
+                if isinstance(item, dict) and 'hotkey' in item:
+                    # Execute hotkey
+                    self._execute_hotkey(item['hotkey'])
+                else:
+                    # Type regular text
+                    for char in item:
+                        self._type_char(char)
+                        if delay > 0:
+                            time.sleep(delay)
             
-            logger.info(f"Typed: {processed_text[:50]}{'...' if len(processed_text) > 50 else ''}")
+            logger.info(f"Completed typing/hotkey execution")
         
         except Exception as e:
             logger.error(f"Error typing text: {e}")
     
-    def _apply_word_mappings(self, text: str) -> str:
+    def _apply_word_mappings(self, text: str):
         """
         Apply word mappings to text
         
@@ -66,10 +72,10 @@ class KeyboardTyper:
             text: Input text
             
         Returns:
-            Text with word mappings applied
+            List of strings or hotkey commands to execute in order
         """
         if not self.word_mappings:
-            return text
+            return [text]
         
         # First, strip trailing period if it exists (unless "period" or "dot" is in the mapping)
         # This removes auto-added periods from Whisper
@@ -78,19 +84,113 @@ class KeyboardTyper:
             # Remove trailing period that Whisper adds
             text = re.sub(r'\.\s*$', '', text)
         
-        # Replace mapped words
-        result = text
-        for word, replacement in self.word_mappings.items():
-            # Create a regex pattern that matches the word with optional punctuation
-            # Match word with trailing punctuation (comma, period, etc.) or whitespace
-            pattern = rf'\b{re.escape(word)}[,.\s]*'
-            # Replace with the mapped value (no space added, the replacement itself controls formatting)
-            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+        # Build a list of items (text segments and hotkey commands) to process
+        items = []
+        remaining_text = text
         
-        # Clean up any double spaces
-        result = re.sub(r' +', ' ', result)
+        # Sort mappings by length (longest first) to avoid partial matches
+        sorted_mappings = sorted(self.word_mappings.items(), key=lambda x: len(x[0]), reverse=True)
         
-        return result
+        while remaining_text:
+            matched = False
+            
+            for word, replacement in sorted_mappings:
+                # Match word with optional trailing punctuation
+                pattern = rf'^(.*?)\b{re.escape(word)}\b[,.\s]*(.*)$'
+                match = re.search(pattern, remaining_text, flags=re.IGNORECASE)
+                
+                if match:
+                    before, after = match.groups()
+                    
+                    # Add text before the match
+                    if before.strip():
+                        items.append(before)
+                    
+                    # Check if replacement is a hotkey (format: "ctrl+z")
+                    if '+' in replacement and len(replacement) < 20:
+                        # Likely a hotkey
+                        items.append({'hotkey': replacement})
+                    else:
+                        # Regular text replacement
+                        items.append(replacement)
+                    
+                    remaining_text = after
+                    matched = True
+                    break
+            
+            if not matched:
+                # No more matches, add remaining text
+                if remaining_text.strip():
+                    items.append(remaining_text)
+                break
+        
+        # Clean up: merge adjacent text items and remove empty items
+        merged_items = []
+        for item in items:
+            if isinstance(item, dict):
+                merged_items.append(item)
+            elif item.strip():
+                if merged_items and isinstance(merged_items[-1], str):
+                    merged_items[-1] += item
+                else:
+                    merged_items.append(item)
+        
+        return merged_items if merged_items else [text]
+    
+    def _execute_hotkey(self, hotkey_str: str):
+        """
+        Execute a hotkey combination
+        
+        Args:
+            hotkey_str: Hotkey string like "ctrl+z" or "ctrl+shift+s"
+        """
+        try:
+            # Parse hotkey string
+            keys = hotkey_str.lower().split('+')
+            
+            # Map string names to pynput Key objects
+            key_map = {
+                'ctrl': Key.ctrl,
+                'control': Key.ctrl,
+                'shift': Key.shift,
+                'alt': Key.alt,
+                'cmd': Key.cmd,
+                'win': Key.cmd,
+                'super': Key.cmd,
+                'enter': Key.enter,
+                'tab': Key.tab,
+                'esc': Key.esc,
+                'escape': Key.esc,
+                'backspace': Key.backspace,
+                'delete': Key.delete,
+                'space': Key.space,
+            }
+            
+            # Convert keys to pynput Key objects or characters
+            pynput_keys = []
+            for key in keys:
+                if key in key_map:
+                    pynput_keys.append(key_map[key])
+                else:
+                    # Single character key
+                    pynput_keys.append(key)
+            
+            logger.info(f"Executing hotkey: {hotkey_str}")
+            
+            # Press all keys in order
+            for key in pynput_keys:
+                self.controller.press(key)
+                time.sleep(0.01)
+            
+            # Release all keys in reverse order
+            for key in reversed(pynput_keys):
+                self.controller.release(key)
+                time.sleep(0.01)
+            
+            logger.debug(f"Hotkey executed: {hotkey_str}")
+        
+        except Exception as e:
+            logger.error(f"Error executing hotkey {hotkey_str}: {e}")
     
     def _type_char(self, char: str):
         """

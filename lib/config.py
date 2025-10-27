@@ -15,12 +15,35 @@ DEFAULT_CONFIG = {
     "audio": {
         "sample_rate": 16000,
         "mic_device": None,  # Auto-detect if None
-        "min_utterance_duration": 0.8,  # seconds
-        "silence_chunks": 15,
+        "buffer_size": 512,
+        "min_utterance_duration": 1.1,  # Minimum speech duration (seconds)
+        "post_speech_silence_duration": 0.6,  # Silence before finalizing (seconds)
+        "pre_recording_buffer_duration": 1.0,  # Buffer before speech starts (seconds)
+    },
+    "transcription": {
+        # Main model (final accurate transcription)
+        "model": "large-v2",  # Options: tiny, base, small, medium, large-v2, large-v3
+        "device": "cpu",  # "cpu" or "cuda"
+        "compute_type": "int8",  # "int8", "float16", "float32"
+        "beam_size": 5,
+        "language": "en",  # Language code or None for auto-detect
+        
+        # Realtime preview model
+        "realtime_model": "tiny.en",
+        "beam_size_realtime": 3,
+        "enable_realtime_transcription": True,
+        "realtime_processing_pause": 0.02,  # Seconds between realtime updates
+    },
+    "vad": {
+        # WebRTC (fast filter)
+        "webrtc_sensitivity": 3,  # 0-3, higher = less sensitive to noise
+        
+        # Silero (accurate verification)
+        "silero_sensitivity": 0.05,  # 0.0-1.0, lower = more sensitive
+        "silero_use_onnx": True,  # Use ONNX for faster CPU inference
     },
     "shortcuts": {
-        "toggle_on": "ctrl+shift+space",
-        "toggle_off": "ctrl+shift+space",  # Same key toggles on/off
+        "toggle_listening": "capslock",  # "capslock" or hotkey like "ctrl+shift+space"
     },
     "word_mappings": {
         "new line": "\n",
@@ -48,6 +71,10 @@ DEFAULT_CONFIG = {
     },
     "system_tray": {
         "enabled": True,
+    },
+    "logging": {
+        "timestamps": True,  # Add timestamps to log output
+        "verbose": False,
     },
 }
 
@@ -154,6 +181,11 @@ class Config:
         return self.get('audio.sample_rate', 16000)
     
     @property
+    def buffer_size(self) -> int:
+        """Get audio buffer size"""
+        return self.get('audio.buffer_size', 512)
+    
+    @property
     def mic_device(self) -> Optional[int]:
         """Get microphone device index"""
         return self.get('audio.mic_device')
@@ -161,22 +193,102 @@ class Config:
     @property
     def min_utterance_duration(self) -> float:
         """Get minimum utterance duration in seconds"""
-        return self.get('audio.min_utterance_duration', 1.5)
+        return self.get('audio.min_utterance_duration', 1.1)
+    
+    @property
+    def post_speech_silence_duration(self) -> float:
+        """Get post-speech silence duration in seconds"""
+        return self.get('audio.post_speech_silence_duration', 0.6)
+    
+    @property
+    def pre_recording_buffer_duration(self) -> float:
+        """Get pre-recording buffer duration in seconds"""
+        return self.get('audio.pre_recording_buffer_duration', 1.0)
+    
+    # Transcription properties
+    @property
+    def model(self) -> str:
+        """Get main transcription model"""
+        return self.get('transcription.model', 'large-v2')
+    
+    @property
+    def realtime_model(self) -> str:
+        """Get realtime preview model"""
+        return self.get('transcription.realtime_model', 'tiny.en')
+    
+    @property
+    def device(self) -> str:
+        """Get compute device (cpu or cuda)"""
+        return self.get('transcription.device', 'cpu')
+    
+    @property
+    def compute_type(self) -> str:
+        """Get compute type (int8, float16, float32)"""
+        return self.get('transcription.compute_type', 'int8')
+    
+    @property
+    def beam_size(self) -> int:
+        """Get beam size for main model"""
+        return self.get('transcription.beam_size', 5)
+    
+    @property
+    def beam_size_realtime(self) -> int:
+        """Get beam size for realtime model"""
+        return self.get('transcription.beam_size_realtime', 3)
+    
+    @property
+    def language(self) -> str:
+        """Get language code"""
+        return self.get('transcription.language', 'en')
+    
+    @property
+    def enable_realtime_transcription(self) -> bool:
+        """Check if realtime transcription is enabled"""
+        return self.get('transcription.enable_realtime_transcription', True)
+    
+    @property
+    def realtime_processing_pause(self) -> float:
+        """Get realtime processing pause in seconds"""
+        return self.get('transcription.realtime_processing_pause', 0.02)
+    
+    # VAD properties
+    @property
+    def webrtc_sensitivity(self) -> int:
+        """Get WebRTC VAD sensitivity (0-3)"""
+        return self.get('vad.webrtc_sensitivity', 3)
+    
+    @property
+    def silero_sensitivity(self) -> float:
+        """Get Silero VAD sensitivity (0.0-1.0)"""
+        return self.get('vad.silero_sensitivity', 0.05)
+    
+    @property
+    def silero_use_onnx(self) -> bool:
+        """Check if ONNX should be used for Silero"""
+        return self.get('vad.silero_use_onnx', True)
+    
+    # Shortcuts
+    @property
+    def toggle_listening_shortcut(self) -> str:
+        """Get keyboard shortcut to toggle listening"""
+        return self.get('shortcuts.toggle_listening', 'capslock')
     
     @property
     def silence_chunks(self) -> int:
-        """Get number of silence chunks before ending utterance"""
-        return self.get('audio.silence_chunks', 15)
+        """Get number of silence chunks before ending utterance (legacy support)"""
+        # Calculate from post_speech_silence_duration for backward compatibility
+        duration = self.post_speech_silence_duration
+        return int((self.sample_rate / self.buffer_size) * duration)
     
     @property
     def toggle_on_shortcut(self) -> str:
-        """Get keyboard shortcut to toggle listening on"""
-        return self.get('shortcuts.toggle_on', 'ctrl+shift+space')
+        """Get keyboard shortcut to toggle listening on (legacy support)"""
+        return self.toggle_listening_shortcut
     
     @property
     def toggle_off_shortcut(self) -> str:
-        """Get keyboard shortcut to toggle listening off"""
-        return self.get('shortcuts.toggle_off', 'ctrl+shift+space')
+        """Get keyboard shortcut to toggle listening off (legacy support)"""
+        return self.toggle_listening_shortcut
     
     @property
     def notifications_enabled(self) -> bool:
@@ -187,3 +299,13 @@ class Config:
     def system_tray_enabled(self) -> bool:
         """Check if system tray is enabled"""
         return self.get('system_tray.enabled', True)
+    
+    @property
+    def timestamps_enabled(self) -> bool:
+        """Check if timestamps are enabled in logging"""
+        return self.get('logging.timestamps', True)
+    
+    @property
+    def verbose_logging(self) -> bool:
+        """Check if verbose logging is enabled"""
+        return self.get('logging.verbose', False)

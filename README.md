@@ -6,12 +6,14 @@ A cross-platform voice keyboard that transcribes your speech into typed text in 
 
 - **🎯 Voice-to-Keyboard**: Speaks directly into any application as typed text
 - **🔄 Cross-Platform**: Works on Windows, macOS, and Linux
-- **⚡ Real-Time**: Fast transcription with <1s latency using Whisper
-- **🔇 Smart VAD**: Intelligent voice activity detection to filter silence
+- **⚡ Real-Time Preview**: See words appear instantly as you speak with dual-model transcription
+- **🎯 Accurate Final Text**: Large model refines transcription after you finish speaking
+- **🔇 Dual-VAD System**: WebRTC + Silero for fast and accurate speech detection
 - **⌨️ Configurable Commands**: Map spoken words to keyboard shortcuts
 - **🔔 System Tray Integration**: Background operation with notifications
-- **🔥 Hotkey Control**: Toggle listening on/off with keyboard shortcuts
-- **📝 Word Mappings**: Convert spoken commands to actions (e.g., "bullet" → newline + bullet)
+- **🔥 CapsLock Control**: Toggle listening by turning CapsLock ON/OFF
+- **📝 Word Mappings**: Convert spoken commands to actions (e.g., "new line" → newline)
+- **📊 Performance Monitoring**: Timestamped logging to measure latency
 
 ## 🎯 Use Cases
 
@@ -37,11 +39,11 @@ Using `uv` (fast Python package installer):
 git clone https://github.com/mikesmullin/whisper.git
 cd whisper
 
-# Install using uv
-uv tool install --editable .
+# Install using uv with required dependencies
+uv tool install --editable . --with webrtcvad-wheels --with scipy
 ```
 
-This installs the `whisper` command globally on your system with all required dependencies.
+This installs the `whisper` command globally on your system with all required dependencies in an isolated environment.
 
 ### Alternative Installation Methods
 
@@ -51,12 +53,13 @@ This installs the `whisper` command globally on your system with all required de
 git clone https://github.com/mikesmullin/whisper.git
 cd whisper
 
-# Install with pip
-pip install -e .
+# Install with all dependencies
+pip install -e . -r requirements.txt
 ```
 
-**For development (with all dependencies):**
+**For development:**
 ```bash
+# Install in editable mode with all dependencies
 pip install -e . -r requirements.txt
 ```
 
@@ -73,9 +76,9 @@ Without this, the microphone will register zero audio.
 3. Find and enable your terminal app (Terminal, iTerm2, etc.)
 4. **Important**: You may need to **restart your terminal** after granting permission
 
-#### Step 2: Grant Accessibility Permission (Required for keyboard typing & hotkeys)
+#### Step 2: Grant Accessibility Permission (Required for keyboard typing)
 
-Without this, whisper won't be able to type text or use global hotkeys.
+Without this, whisper won't be able to type text.
 
 1. Open **System Settings**
 2. Go to **Privacy & Security** → **Accessibility**
@@ -83,13 +86,20 @@ Without this, whisper won't be able to type text or use global hotkeys.
 4. **Enable** the checkbox next to it
 5. **IMPORTANT**: Completely quit and restart your terminal (Cmd+Q, then relaunch)
 
-#### Step 3: Test Installation
+#### Step 3: Install macOS-specific dependencies (for CapsLock monitoring)
+
+```bash
+pip install pyobjc-framework-Cocoa
+```
+
+#### Step 4: Test Installation
 
 ```bash
 whisper --generate-config
-whisper --headless --verbose
-# Press Ctrl+Shift+Space to toggle listening
+whisper --verbose
+# Turn CapsLock ON to start listening
 # Speak something
+# Turn CapsLock OFF to stop listening
 # Press Ctrl+C to quit
 ```
 
@@ -123,11 +133,24 @@ whisper --generate-config
 
 Once running:
 
-1. **Toggle Listening**: Press `Ctrl+Shift+Space` (configurable)
+1. **Toggle Listening**: Turn **CapsLock ON** to start, **CapsLock OFF** to stop (default)
+   - Alternative: Use hotkey like `Ctrl+Shift+Space` (configurable in `~/.whisper.yaml`)
 2. **System Tray**: Right-click the tray icon for menu
    - Start/Stop Listening
    - Quit
 3. **Exit**: Press `Ctrl+C` or use tray menu
+
+### 🎙️ How It Works
+
+1. **Turn CapsLock ON** → Listening starts
+2. **Start speaking** → See words appear in real-time as you speak (preview mode)
+3. **Stop speaking** → After brief pause (~0.6s), preview is replaced with accurate final transcription
+4. **Turn CapsLock OFF** → Listening stops
+
+**Performance**: 
+- Preview appears in ~300ms (instant feedback!)
+- Final transcription in ~600ms after speech ends
+- Total: ~2-3x faster than traditional speech-to-text
 
 ### ⚙️ Configuration
 
@@ -135,37 +158,6 @@ Whisper uses a YAML configuration file at `~/.whisper.yaml`. Generate it with:
 
 ```bash
 whisper --generate-config
-```
-
-#### Default Configuration
-
-```yaml
-audio:
-  sample_rate: 16000
-  mic_device: null  # Auto-detect
-  min_utterance_duration: 1.5  # seconds
-  silence_chunks: 15
-
-shortcuts:
-  toggle_on: "ctrl+shift+space"
-  toggle_off: "ctrl+shift+space"
-
-word_mappings:
-  ENTER: "\n"
-  enter: "\n"
-  new line: "\n"
-  bullet: "\n - "
-  bullet point: "\n - "
-  tab: "\t"
-  TAB: "\t"
-
-notifications:
-  enabled: true
-  show_on_start: true
-  show_on_toggle: true
-
-system_tray:
-  enabled: true
 ```
 
 #### Customizing Word Mappings
@@ -188,9 +180,38 @@ word_mappings:
   arrow: " -> "
   equals: " = "
   
+  # Hotkeys (execute keyboard shortcuts)
+  now save: "ctrl+s"
+  now undo: "ctrl+z"
+  now copy: "ctrl+c"
+  
   # Custom shortcuts
   my email: "your.email@example.com"
   my address: "123 Main St, City, State"
+```
+
+#### Performance Tuning
+
+**For faster response:**
+```yaml
+vad:
+  silero_sensitivity: 0.02  # More sensitive
+audio:
+  post_speech_silence_duration: 0.4  # Faster finalization
+```
+
+**For better accuracy:**
+```yaml
+transcription:
+  model: "large-v3"  # Most accurate
+  beam_size: 7  # Higher quality
+```
+
+**For lower resource usage:**
+```yaml
+transcription:
+  model: "medium"  # Faster than large-v2
+  realtime_model: "tiny"  # Minimal overhead
 ```
 
 ### 🔧 Command-Line Options

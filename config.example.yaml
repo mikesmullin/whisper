@@ -1,25 +1,81 @@
-# Whisper Voice Keyboard Configuration
+# Whisper Voice Keyboard Configuration (Refactored)
 # Place this file at ~/.whisper.yaml to customize settings
 
 audio:
   # Sample rate for audio capture (Hz)
   sample_rate: 16000
   
+  # Audio buffer size (samples per chunk)
+  buffer_size: 512
+  
   # Microphone device index (null for auto-detect)
   # Find device IDs: python -c "import sounddevice; print(sounddevice.query_devices())"
   mic_device: null
   
-  # Minimum duration of utterance to transcribe (seconds)
-  min_utterance_duration: 0.8
+  # Minimum duration of speech to transcribe (seconds)
+  min_utterance_duration: 1.1
   
-  # Number of silent chunks before ending utterance
-  silence_chunks: 15
+  # Silence duration before finalizing transcription (seconds)
+  # Lower = faster completion, but may cut off speech
+  post_speech_silence_duration: 0.6
+  
+  # Buffer duration before speech detection (seconds)
+  # Captures audio before VAD detects speech onset
+  pre_recording_buffer_duration: 1.0
+
+transcription:
+  # Main model for final accurate transcription
+  # Options: tiny, tiny.en, base, base.en, small, small.en, medium, medium.en, large-v2, large-v3
+  # Larger models are more accurate but slower
+  model: "large-v2"
+  
+  # Realtime preview model (fast, lower accuracy)
+  # Use tiny/tiny.en for instant feedback
+  realtime_model: "tiny.en"
+  
+  # Compute device: "cpu" or "cuda" (for GPU acceleration)
+  device: "cpu"
+  
+  # Compute type: "int8" (fastest), "float16" (GPU), "float32" (highest quality)
+  compute_type: "int8"
+  
+  # Beam size for main model (higher = more accurate, slower)
+  beam_size: 5
+  
+  # Beam size for realtime model (lower = faster)
+  beam_size_realtime: 3
+  
+  # Language code (e.g., "en", "es", "fr", "de", "zh")
+  # Set to null for auto-detection
+  language: "en"
+  
+  # Enable realtime transcription preview
+  # Shows words as you speak, then refines with final transcription
+  enable_realtime_transcription: true
+  
+  # Interval between realtime updates (seconds)
+  # Lower = more frequent updates, higher CPU usage
+  realtime_processing_pause: 0.02
+
+vad:
+  # Voice Activity Detection settings
+  
+  # WebRTC sensitivity (0-3, higher = less sensitive to noise)
+  # Use 3 for noisy environments, 1 for quiet environments
+  webrtc_sensitivity: 3
+  
+  # Silero sensitivity (0.0-1.0, lower = more sensitive)
+  # Lower values catch quieter speech but may have false positives
+  silero_sensitivity: 0.05
+  
+  # Use ONNX for faster Silero inference on CPU
+  silero_use_onnx: true
 
 shortcuts:
-  # Keyboard shortcuts to toggle listening on/off
-  # Format: "modifier+key" (e.g., "ctrl+shift+space", "alt+v")
-  toggle_on: "ctrl+shift+space"
-  toggle_off: "ctrl+shift+space"
+  # Toggle listening on/off
+  # Options: "capslock" or hotkey like "ctrl+shift+space"
+  # CapsLock ON = listening, CapsLock OFF = stopped
+  toggle_listening: "capslock"
 
 word_mappings:
   # Map spoken words to keyboard output
@@ -49,9 +105,6 @@ word_mappings:
   now paste: "ctrl+v"
   now cut: "ctrl+x"
   now save: "ctrl+s"
-
-  # Programs
-  demon: "d "
   
   # Add your own custom mappings below:
   # new paragraph: "\n\n"
@@ -72,3 +125,11 @@ notifications:
 system_tray:
   # Enable/disable system tray icon
   enabled: true
+
+logging:
+  # Add timestamps to console output for performance monitoring
+  # Format: "1.234s Message"
+  timestamps: true
+  
+  # Enable verbose logging
+  verbose: false

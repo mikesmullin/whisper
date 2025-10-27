@@ -79,9 +79,9 @@ vad:
 
 shortcuts:
   # Toggle listening on/off
-  # Options: "capslock" or hotkey like "ctrl+shift+space"
-  # CapsLock ON = listening, CapsLock OFF = stopped
-  toggle_listening: "capslock"
+  # Hotkey combination to start/stop listening
+  # Examples: "ctrl+shift+space", "ctrl+alt+l", "alt+space"
+  toggle_listening: "ctrl+shift+space"
 
 keyboard:
   # Delay between each keystroke in milliseconds

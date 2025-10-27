@@ -15,7 +15,7 @@ DEFAULT_CONFIG = {
     "audio": {
         "sample_rate": 16000,
         "mic_device": None,  # Auto-detect if None
-        "buffer_size": 512,
+        "buffer_size": 512,  # Silero requires >=512, WebRTC uses first 480
         "min_utterance_duration": 1.1,  # Minimum speech duration (seconds)
         "post_speech_silence_duration": 0.6,  # Silence before finalizing (seconds)
         "pre_recording_buffer_duration": 1.0,  # Buffer before speech starts (seconds)
@@ -33,6 +33,7 @@ DEFAULT_CONFIG = {
         "beam_size_realtime": 3,
         "enable_realtime_transcription": True,
         "realtime_processing_pause": 0.02,  # Seconds between realtime updates
+        "type_realtime_preview": False,  # Type preview to keyboard (causes backspace corrections)
     },
     "vad": {
         # WebRTC (fast filter)
@@ -44,6 +45,9 @@ DEFAULT_CONFIG = {
     },
     "shortcuts": {
         "toggle_listening": "capslock",  # "capslock" or hotkey like "ctrl+shift+space"
+    },
+    "keyboard": {
+        "typing_delay_ms": 10,  # Milliseconds delay between each keystroke (prevents skipping in some inputs)
     },
     "word_mappings": {
         "new line": "\n",
@@ -68,6 +72,11 @@ DEFAULT_CONFIG = {
         "enabled": True,
         "show_on_start": True,
         "show_on_toggle": True,
+    },
+    "sounds": {
+        "enabled": True,
+        "on_listening_start": "sfx/on.wav",
+        "on_listening_stop": "sfx/off.wav",
     },
     "system_tray": {
         "enabled": True,
@@ -309,3 +318,28 @@ class Config:
     def verbose_logging(self) -> bool:
         """Check if verbose logging is enabled"""
         return self.get('logging.verbose', False)
+    
+    @property
+    def type_realtime_preview(self) -> bool:
+        """Check if realtime preview should be typed to keyboard"""
+        return self.get('transcription.type_realtime_preview', False)
+    
+    @property
+    def typing_delay_ms(self) -> int:
+        """Get typing delay in milliseconds between keystrokes"""
+        return self.get('keyboard.typing_delay_ms', 10)
+    
+    @property
+    def sounds_enabled(self) -> bool:
+        """Check if sound playback is enabled"""
+        return self.get('sounds.enabled', True)
+    
+    @property
+    def sound_on_listening_start(self) -> str:
+        """Get sound file path for listening start"""
+        return self.get('sounds.on_listening_start', 'sfx/on.wav')
+    
+    @property
+    def sound_on_listening_stop(self) -> str:
+        """Get sound file path for listening stop"""
+        return self.get('sounds.on_listening_stop', 'sfx/off.wav')

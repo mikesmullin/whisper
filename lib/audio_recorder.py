@@ -58,7 +58,7 @@ class AudioRecorder:
         
         # Audio configuration
         sample_rate: int = 16000,
-        buffer_size: int = 512,
+        buffer_size: int = 512,  # Silero requires >=512, WebRTC uses first 480
         mic_device: Optional[int] = None,
         
         # Timing configuration
@@ -183,6 +183,7 @@ class AudioRecorder:
         # Recording state
         self.is_recording = False
         self.is_running = False
+        self.is_paused = False  # Pause VAD processing (e.g., when CapsLock is OFF)
         self.frames = []
         self.silence_count = 0
         self.max_silence_chunks = int(
@@ -244,6 +245,17 @@ class AudioRecorder:
         
         logger.info(f"✓ Audio recorder stopped (transcriptions: {self.transcription_count})")
     
+    def pause(self):
+        """Pause VAD processing (stop listening for speech)"""
+        self.is_paused = True
+        # If currently recording, stop it
+        if self.is_recording:
+            self._stop_recording()
+    
+    def resume(self):
+        """Resume VAD processing (start listening for speech)"""
+        self.is_paused = False
+    
     def _auto_detect_microphone(self) -> int:
         """Auto-detect default microphone device"""
         try:
@@ -272,6 +284,10 @@ class AudioRecorder:
         def audio_callback(indata, frames, time_info, status):
             if status:
                 logger.warning(f"Audio status: {status}")
+            
+            # Skip processing if paused (e.g., CapsLock OFF)
+            if self.is_paused:
+                return
             
             # Extract mono audio
             audio_chunk = indata[:, 0].copy()

@@ -79,14 +79,34 @@ class VoiceActivityDetector:
         """
         self.webrtc_checks += 1
         
-        # Convert float32 audio to int16 for WebRTC
-        audio_int16 = (audio_chunk * 32768).astype(np.int16)
+        # WebRTC requires specific frame sizes (10, 20, or 30 ms)
+        # For 16kHz: 160, 320, or 480 samples
+        # Use 480 samples (30ms) for WebRTC
+        webrtc_frame_size = 480
         
-        # Fast pre-filter with WebRTC (~1ms)
-        webrtc_speech = self.webrtc_vad.is_speech(
-            audio_int16.tobytes(),
-            self.sample_rate
-        )
+        # Convert float32 audio to int16 for WebRTC
+        # Ensure values are clipped to valid range
+        audio_clipped = np.clip(audio_chunk, -1.0, 1.0)
+        audio_int16 = (audio_clipped * 32767).astype(np.int16)
+        
+        # Prepare WebRTC frame
+        if len(audio_int16) < webrtc_frame_size:
+            # Pad with zeros if too short
+            webrtc_audio = np.pad(audio_int16, (0, webrtc_frame_size - len(audio_int16)))
+        else:
+            # Use first 480 samples for WebRTC
+            webrtc_audio = audio_int16[:webrtc_frame_size]
+        
+        try:
+            # Fast pre-filter with WebRTC (~1ms)
+            webrtc_speech = self.webrtc_vad.is_speech(
+                webrtc_audio.tobytes(),
+                self.sample_rate
+            )
+        except Exception as e:
+            # If WebRTC fails, fall back to Silero only
+            logger.warning(f"WebRTC VAD error: {e}, using Silero only")
+            webrtc_speech = True  # Let Silero decide
         
         # If WebRTC says no speech, skip expensive Silero check
         if not webrtc_speech:
@@ -95,7 +115,15 @@ class VoiceActivityDetector:
         # WebRTC detected potential speech, verify with Silero (~10-20ms)
         self.silero_checks += 1
         
-        audio_tensor = torch.from_numpy(audio_chunk).float()
+        # Silero requires at least 512 samples (32ms at 16kHz)
+        # Pad the original audio chunk if needed
+        silero_min_size = 512
+        if len(audio_chunk) < silero_min_size:
+            silero_audio = np.pad(audio_chunk, (0, silero_min_size - len(audio_chunk)))
+        else:
+            silero_audio = audio_chunk
+        
+        audio_tensor = torch.from_numpy(silero_audio).float()
         with torch.no_grad():
             speech_prob = self.silero_vad(audio_tensor, self.sample_rate).item()
         

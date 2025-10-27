@@ -6,6 +6,7 @@ audio:
   sample_rate: 16000
   
   # Audio buffer size (samples per chunk)
+  # Silero VAD requires at least 512 samples, WebRTC uses first 480
   buffer_size: 512
   
   # Microphone device index (null for auto-detect)
@@ -56,6 +57,11 @@ transcription:
   # Interval between realtime updates (seconds)
   # Lower = more frequent updates, higher CPU usage
   realtime_processing_pause: 0.02
+  
+  # Type realtime preview to keyboard (false = only show in stdout)
+  # When true, preview is typed and corrected with backspaces (can be distracting)
+  # When false, only final transcription is typed to keyboard
+  type_realtime_preview: false
 
 vad:
   # Voice Activity Detection settings
@@ -76,6 +82,12 @@ shortcuts:
   # Options: "capslock" or hotkey like "ctrl+shift+space"
   # CapsLock ON = listening, CapsLock OFF = stopped
   toggle_listening: "capslock"
+
+keyboard:
+  # Delay between each keystroke in milliseconds
+  # Prevents skipping keys in some terminal inputs
+  # Increase if keys are being dropped
+  typing_delay_ms: 10
 
 word_mappings:
   # Map spoken words to keyboard output
@@ -120,7 +132,18 @@ notifications:
   show_on_start: true
   
   # Show notification when toggling listening on/off
+  # Note: When sounds are enabled, sounds play instead of toggle notifications
   show_on_toggle: true
+
+sounds:
+  # Enable/disable sound playback
+  enabled: true
+  
+  # Sound file to play when listening starts (CapsLock ON)
+  on_listening_start: "sfx/on.wav"
+  
+  # Sound file to play when listening stops (CapsLock OFF)
+  on_listening_stop: "sfx/off.wav"
 
 system_tray:
   # Enable/disable system tray icon

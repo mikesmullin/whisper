@@ -22,6 +22,7 @@ from lib.config import Config
 from lib.keyboard_output import KeyboardTyper
 from lib.tray import SystemTray, TRAY_AVAILABLE
 from lib.audio_recorder import AudioRecorder
+from lib.sound import SoundPlayer
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +57,15 @@ class VoiceKeyboard:
         # Statistics
         self.transcription_count = 0
         
+        # Initialize sound player
+        self.sound = SoundPlayer(enabled=config.sounds_enabled)
+        
         # Initialize keyboard typer
-        self.typer = KeyboardTyper(word_mappings=config.word_mappings)
+        # Initialize keyboard typer
+        self.typer = KeyboardTyper(
+            word_mappings=config.word_mappings,
+            typing_delay_ms=config.typing_delay_ms
+        )
         
         # Initialize audio recorder with callbacks
         self.log("Initializing audio recorder...")
@@ -147,8 +155,9 @@ class VoiceKeyboard:
         if self.verbose:
             self.log(f"[Preview]: {text}")
         
-        # Type preview (will be replaced by final)
-        self.typer.type_realtime_preview(text)
+        # Type preview to keyboard only if enabled (causes backspace corrections)
+        if self.config.type_realtime_preview:
+            self.typer.type_realtime_preview(text)
     
     def on_final_transcription(self, text: str):
         """Callback for final accurate transcription"""
@@ -237,12 +246,17 @@ class VoiceKeyboard:
         self.is_listening = True
         self.log("🎤 Listening started")
         
-        # Update tray icon
+        # Resume audio recorder (unpause VAD)
+        self.recorder.resume()
+        
+        # Play sound instead of showing notification
+        if self.config.sounds_enabled:
+            self.sound.play(self.config.sound_on_listening_start)
+        
+        # Update tray icon (without notification)
         if self.tray:
             self.tray.set_listening(True)
             self.tray.update_menu(True)
-            if self.config.get('notifications.show_on_toggle', True):
-                self.tray.notify("Whisper", "Listening started")
     
     def stop_listening(self):
         """Stop listening to microphone"""
@@ -252,19 +266,25 @@ class VoiceKeyboard:
         self.is_listening = False
         self.log("⏸️  Listening stopped")
         
-        # Update tray icon
+        # Pause audio recorder (stop VAD processing)
+        self.recorder.pause()
+        
+        # Play sound instead of showing notification
+        if self.config.sounds_enabled:
+            self.sound.play(self.config.sound_on_listening_stop)
+        
+        # Update tray icon (without notification)
         if self.tray:
             self.tray.set_listening(False)
             self.tray.update_menu(False)
-            if self.config.get('notifications.show_on_toggle', True):
-                self.tray.notify("Whisper", "Listening stopped")
     
     def start(self):
         """Start the voice keyboard"""
         self.is_running = True
         
-        # Start audio recorder
+        # Start audio recorder (in paused state initially)
         self.recorder.start()
+        self.recorder.pause()  # Start paused, user toggles CapsLock to begin
         self.log("✓ Audio recorder ready")
         
         # Start CapsLock monitoring if enabled

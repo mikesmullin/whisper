@@ -14,15 +14,18 @@ logger = logging.getLogger(__name__)
 class KeyboardTyper:
     """Types transcribed text using keyboard simulation"""
     
-    def __init__(self, word_mappings: Optional[Dict[str, str]] = None):
+    def __init__(self, word_mappings: Optional[Dict[str, str]] = None, typing_delay_ms: int = 10):
         """
         Initialize keyboard typer
         
         Args:
             word_mappings: Dictionary mapping spoken words to keyboard inputs
+            typing_delay_ms: Delay in milliseconds between each keystroke
         """
         self.controller = Controller()
         self.word_mappings = word_mappings or {}
+        self.typing_delay_ms = typing_delay_ms
+        self.typing_delay_s = typing_delay_ms / 1000.0  # Convert to seconds
         
         # Preview mode tracking
         self.preview_length = 0  # Number of characters in current preview
@@ -195,6 +198,9 @@ class KeyboardTyper:
         """
         try:
             self.controller.type(char)
+            # Add delay between keystrokes to prevent skipping in some inputs
+            if self.typing_delay_s > 0:
+                time.sleep(self.typing_delay_s)
         except Exception as e:
             # If pynput can't type it directly, log and skip
             logger.warning(f"Could not type character {repr(char)}: {e}")

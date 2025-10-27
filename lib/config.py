@@ -22,9 +22,9 @@ DEFAULT_CONFIG = {
     },
     "transcription": {
         # Main model (final accurate transcription)
-        "model": "large-v2",  # Options: tiny, base, small, medium, large-v2, large-v3
-        "device": "cpu",  # "cpu" or "cuda"
-        "compute_type": "int8",  # "int8", "float16", "float32"
+        "model": "large-v3",  # Options: tiny, base, small, medium, large-v2, large-v3
+        "device": "cuda",  # "auto", "cpu", or "cuda" - cuda for GPU acceleration
+        "compute_type": "float16",  # "auto", "int8", "float16", "float32" - float16 for GPU
         "beam_size": 5,
         "language": "en",  # Language code or None for auto-detect
         

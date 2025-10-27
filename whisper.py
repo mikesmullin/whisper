@@ -3,6 +3,7 @@
 Whisper - Voice Keyboard
 
 A cross-platform voice keyboard that transcribes speech to typed text.
+Refactored to use dual-model system with realtime preview.
 """
 
 import argparse
@@ -11,18 +12,16 @@ import signal
 import sys
 import threading
 import time
+import platform
 from pathlib import Path
 
 import numpy as np
-import torch
-import sounddevice as sd
-from faster_whisper import WhisperModel
-from pynput import keyboard
 
 # Import custom modules
 from lib.config import Config
 from lib.keyboard_output import KeyboardTyper
 from lib.tray import SystemTray, TRAY_AVAILABLE
+from lib.audio_recorder import AudioRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -45,34 +44,63 @@ class VoiceKeyboard:
             headless: Run without system tray
         """
         self.config = config
-        self.verbose = verbose
+        self.verbose = verbose or config.verbose_logging
         self.headless = headless
         
         self.is_running = False
         self.is_listening = False
-        self.sample_rate = config.sample_rate
         
-        # Buffers for audio processing
-        self.mic_buffer = []
-        self.mic_vad_buffer = []
-        self.mic_is_speaking = False
-        self.mic_silence_count = 0
-        
-        self.max_silence_chunks = config.silence_chunks
-        self.vad_chunk_size = 512
+        # Timestamp tracking for logging
+        self.start_time = time.time()
         
         # Statistics
         self.transcription_count = 0
         
-        # Audio level tracking for verbose mode
-        self.mic_level = 0.0
-        self.level_lock = threading.Lock()
-        
-        # Load models
-        self._load_models()
-        
         # Initialize keyboard typer
         self.typer = KeyboardTyper(word_mappings=config.word_mappings)
+        
+        # Initialize audio recorder with callbacks
+        self.log("Initializing audio recorder...")
+        self.recorder = AudioRecorder(
+            # Model configuration
+            model=config.model,
+            realtime_model=config.realtime_model,
+            language=config.language,
+            device=config.device,
+            compute_type=config.compute_type,
+            
+            # VAD configuration
+            webrtc_sensitivity=config.webrtc_sensitivity,
+            silero_sensitivity=config.silero_sensitivity,
+            silero_use_onnx=config.silero_use_onnx,
+            
+            # Audio configuration
+            sample_rate=config.sample_rate,
+            buffer_size=config.buffer_size,
+            mic_device=config.mic_device,
+            
+            # Timing configuration
+            min_length_of_recording=config.min_utterance_duration,
+            post_speech_silence_duration=config.post_speech_silence_duration,
+            pre_recording_buffer_duration=config.pre_recording_buffer_duration,
+            
+            # Realtime transcription
+            enable_realtime_transcription=config.enable_realtime_transcription,
+            realtime_processing_pause=config.realtime_processing_pause,
+            
+            # Beam search
+            beam_size=config.beam_size,
+            beam_size_realtime=config.beam_size_realtime,
+            
+            # Callbacks
+            on_recording_start=self.on_recording_start,
+            on_recording_stop=self.on_recording_stop,
+            on_realtime_transcription_update=self.on_realtime_update,
+            on_transcription_complete=self.on_final_transcription,
+            
+            # Logging
+            verbose=self.verbose
+        )
         
         # Initialize system tray (if not headless)
         self.tray = None
@@ -83,61 +111,116 @@ class VoiceKeyboard:
                 notifications_enabled=config.notifications_enabled
             )
         
-        # Setup keyboard hotkeys
-        self._setup_hotkeys()
+        # Setup CapsLock monitoring or hotkey
+        self.capslock_thread = None
+        if config.toggle_listening_shortcut.lower() == "capslock":
+            self.capslock_thread = threading.Thread(
+                target=self._monitor_capslock,
+                daemon=True
+            )
         
-        print("✓ Whisper Voice Keyboard initialized")
+        self.log("✓ Whisper Voice Keyboard initialized")
     
-    def _load_models(self):
-        """Load VAD and Whisper models"""
-        print("Loading models...")
+    def log(self, message: str):
+        """Log message with optional timestamp"""
+        if self.config.timestamps_enabled:
+            elapsed = time.time() - self.start_time
+            seconds = int(elapsed)
+            milliseconds = int((elapsed - seconds) * 1000)
+            timestamp = f"{seconds}.{milliseconds:03d}s "
+            print(f"{timestamp}{message}")
+        else:
+            print(message)
         
-        # Load Silero VAD
-        self.vad_model, _ = torch.hub.load(
-            repo_or_dir='snakers4/silero-vad',
-            model='silero_vad',
-            force_reload=False,
-            verbose=False
-        )
-        print("✓ VAD loaded")
-        
-        # Load Whisper
-        self.whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
-        print("✓ Whisper loaded")
+        sys.stdout.flush()
     
-    def _setup_hotkeys(self):
-        """Setup keyboard hotkeys"""
-        try:
-            toggle_key = self.config.toggle_on_shortcut
-            
-            # Convert from "ctrl+shift+space" to "<ctrl>+<shift>+<space>" format for pynput
-            # pynput requires angle brackets around each key
-            pynput_format = '+'.join(f'<{key}>' for key in toggle_key.split('+'))
-            
-            logger.info(f"Registering hotkey: {toggle_key} -> {pynput_format}")
-            
-            # Use pynput's global hotkey listener
-            from pynput.keyboard import GlobalHotKeys
-            
-            def on_activate():
-                logger.info("Hotkey activated!")
-                self.toggle_listening()
-            
-            hotkeys = {
-                pynput_format: on_activate
-            }
-            
-            self.hotkey_listener = GlobalHotKeys(hotkeys)
-            self.hotkey_listener.start()
-            
-            print(f"✓ Hotkey registered: {toggle_key}")
+    def on_recording_start(self):
+        """Callback when recording starts"""
+        self.log("🎤 Speech detected")
+    
+    def on_recording_stop(self):
+        """Callback when recording stops"""
+        self.log("⏸️  Speech ended")
+    
+    def on_realtime_update(self, text: str):
+        """Callback for realtime preview updates"""
+        if self.verbose:
+            self.log(f"[Preview]: {text}")
         
-        except Exception as e:
-            import traceback
-            logger.error(f"Failed to register hotkey: {e}")
-            logger.error(traceback.format_exc())
-            logger.warning("You can still toggle listening using the system tray menu")
-            self.hotkey_listener = None
+        # Type preview (will be replaced by final)
+        self.typer.type_realtime_preview(text)
+    
+    def on_final_transcription(self, text: str):
+        """Callback for final accurate transcription"""
+        self.transcription_count += 1
+        self.log(f"[Final]: {text}")
+        
+        # Type final text with word mappings
+        self.typer.type_final(text)
+    
+    def _monitor_capslock(self):
+        """Monitor CapsLock state and toggle listening accordingly"""
+        self.log("✓ CapsLock monitoring enabled (CapsLock ON = listening)")
+        
+        if platform.system() == 'Windows':
+            import ctypes
+            VK_CAPITAL = 0x14
+            get_key_state = ctypes.windll.user32.GetKeyState
+            
+            while self.is_running:
+                try:
+                    caps_on = get_key_state(VK_CAPITAL) & 0x0001
+                    
+                    if caps_on and not self.is_listening:
+                        self.start_listening()
+                    elif not caps_on and self.is_listening:
+                        self.stop_listening()
+                    
+                    time.sleep(0.1)  # Check 10 times per second
+                except Exception as e:
+                    logger.error(f"CapsLock monitoring error: {e}")
+                    break
+        
+        elif platform.system() == 'Darwin':  # macOS
+            try:
+                from AppKit import NSEvent, NSEventModifierFlagCapsLock
+                
+                while self.is_running:
+                    try:
+                        caps_on = NSEvent.modifierFlags() & NSEventModifierFlagCapsLock
+                        
+                        if caps_on and not self.is_listening:
+                            self.start_listening()
+                        elif not caps_on and self.is_listening:
+                            self.stop_listening()
+                        
+                        time.sleep(0.1)
+                    except Exception as e:
+                        logger.error(f"CapsLock monitoring error: {e}")
+                        break
+            except ImportError:
+                logger.error("CapsLock monitoring requires PyObjC on macOS")
+                logger.info("Install with: pip install pyobjc-framework-Cocoa")
+        
+        elif platform.system() == 'Linux':
+            import subprocess
+            
+            while self.is_running:
+                try:
+                    result = subprocess.run(['xset', 'q'], capture_output=True, text=True)
+                    caps_on = 'Caps Lock:   on' in result.stdout
+                    
+                    if caps_on and not self.is_listening:
+                        self.start_listening()
+                    elif not caps_on and self.is_listening:
+                        self.stop_listening()
+                    
+                    time.sleep(0.1)
+                except Exception as e:
+                    logger.error(f"CapsLock monitoring error: {e}")
+                    break
+        else:
+            logger.error(f"CapsLock monitoring not supported on {platform.system()}")
     
     def toggle_listening(self):
         """Toggle listening state"""
@@ -152,7 +235,7 @@ class VoiceKeyboard:
             return
         
         self.is_listening = True
-        print("🎤 Listening started")
+        self.log("🎤 Listening started")
         
         # Update tray icon
         if self.tray:
@@ -167,7 +250,7 @@ class VoiceKeyboard:
             return
         
         self.is_listening = False
-        print("⏸️  Listening stopped")
+        self.log("⏸️  Listening stopped")
         
         # Update tray icon
         if self.tray:
@@ -176,107 +259,17 @@ class VoiceKeyboard:
             if self.config.get('notifications.show_on_toggle', True):
                 self.tray.notify("Whisper", "Listening stopped")
     
-    def process_mic_audio(self, audio_chunk):
-        """Process microphone audio with VAD"""
-        if not self.is_listening:
-            return
-        
-        try:
-            # Update audio level for verbose mode
-            if self.verbose:
-                rms = np.sqrt(np.mean(audio_chunk ** 2))
-                with self.level_lock:
-                    self.mic_level = rms
-            
-            audio_tensor = torch.from_numpy(audio_chunk).float()
-            with torch.no_grad():
-                speech_prob = self.vad_model(audio_tensor, self.sample_rate).item()
-            
-            is_speech = speech_prob > 0.5
-            
-            if is_speech:
-                if not self.mic_is_speaking:
-                    logger.debug(f"🎤 Speech detected ({speech_prob:.3f})")
-                    self.mic_is_speaking = True
-                
-                self.mic_buffer.append(audio_chunk)
-                self.mic_silence_count = 0
-            else:
-                if self.mic_is_speaking:
-                    self.mic_silence_count += 1
-                    self.mic_buffer.append(audio_chunk)
-                    
-                    if self.mic_silence_count >= self.max_silence_chunks:
-                        complete_audio = np.concatenate(self.mic_buffer)
-                        duration = len(complete_audio) / self.sample_rate
-                        
-                        # Skip very short utterances
-                        if duration >= self.config.min_utterance_duration:
-                            logger.debug(f"📝 Speech ended ({duration:.1f}s)")
-                            threading.Thread(
-                                target=self.transcribe_and_type,
-                                args=(complete_audio,),
-                                daemon=True
-                            ).start()
-                        
-                        self.mic_buffer = []
-                        self.mic_is_speaking = False
-                        self.mic_silence_count = 0
-        
-        except Exception as e:
-            logger.error(f"Error processing mic audio: {e}")
-    
-    def transcribe_and_type(self, audio):
-        """Transcribe audio and type it"""
-        try:
-            # Transcribe
-            segments, info = self.whisper_model.transcribe(
-                audio,
-                language="en",
-                beam_size=5
-            )
-            
-            text_parts = []
-            for segment in segments:
-                text_parts.append(segment.text.strip())
-            
-            full_text = " ".join(text_parts)
-            
-            if not full_text:
-                return
-            
-            self.transcription_count += 1
-            
-            # Print to stdout if verbose
-            if self.verbose:
-                print(f"[Transcribed]: {full_text}")
-                sys.stdout.flush()
-            
-            # Type the text
-            self.typer.type_text(full_text)
-        
-        except Exception as e:
-            logger.error(f"Error in transcription: {e}")
-    
     def start(self):
         """Start the voice keyboard"""
         self.is_running = True
         
-        # Start microphone stream
-        mic_device = self.config.mic_device
-        if mic_device is None:
-            mic_device = auto_detect_microphone()
-            if mic_device is None:
-                print("Error: Could not auto-detect microphone")
-                return False
+        # Start audio recorder
+        self.recorder.start()
+        self.log("✓ Audio recorder ready")
         
-        thread = threading.Thread(
-            target=self._run_mic_stream,
-            args=(mic_device,),
-            daemon=True
-        )
-        thread.start()
-        print(f"✓ Microphone stream ready (device #{mic_device})")
+        # Start CapsLock monitoring if enabled
+        if self.capslock_thread:
+            self.capslock_thread.start()
         
         # Start system tray
         if self.tray:
@@ -285,80 +278,35 @@ class VoiceKeyboard:
                 self.tray.notify("Whisper", "Voice keyboard ready")
         
         if self.verbose:
-            print("\n🎙️  Ready! Use hotkey to toggle listening... (Ctrl+C to quit)\n")
+            self.log("🎙️  Ready! Use CapsLock or system tray to toggle listening... (Ctrl+C to quit)")
         else:
-            print("\n🎙️  Ready! Use hotkey to toggle listening... (Ctrl+C to quit)\n")
+            self.log("🎙️  Ready! (Ctrl+C to quit)")
         
         # Keep running
         try:
             while self.is_running:
                 time.sleep(0.1)
         except KeyboardInterrupt:
-            print("\n⏹️  Stopping...")
+            self.log("\n⏹️  Stopping...")
             self.quit()
         
         return True
-    
-    def _run_mic_stream(self, device_index):
-        """Run microphone stream"""
-        def callback(indata, frames, time_info, status):
-            if status:
-                logger.warning(f"Mic status: {status}")
-            
-            audio_chunk = indata[:, 0].copy()
-            self.process_mic_audio(audio_chunk)
-        
-        try:
-            with sd.InputStream(
-                device=device_index,
-                channels=1,
-                samplerate=self.sample_rate,
-                blocksize=512,
-                callback=callback
-            ):
-                while self.is_running:
-                    time.sleep(0.1)
-        except Exception as e:
-            logger.error(f"Microphone stream error: {e}")
     
     def quit(self):
         """Stop the voice keyboard"""
         self.is_running = False
         self.is_listening = False
         
-        if self.hotkey_listener:
-            self.hotkey_listener.stop()
+        # Stop audio recorder
+        if self.recorder:
+            self.recorder.stop()
         
+        # Stop tray
         if self.tray:
             self.tray.stop()
         
-        print(f"\n✓ Total transcriptions: {self.transcription_count}")
-        print("✓ Whisper Voice Keyboard stopped")
-
-
-def auto_detect_microphone():
-    """Auto-detect default microphone"""
-    try:
-        default_idx = sd.default.device[0]
-        device_info = sd.query_devices(default_idx)
-        if device_info['max_input_channels'] > 0:
-            print(f"✓ Auto-detected microphone: [{default_idx}] {device_info['name']}")
-            return default_idx
-    except:
-        pass
-    
-    # Fallback: find first microphone
-    devices = sd.query_devices()
-    for idx, device in enumerate(devices):
-        if device['max_input_channels'] > 0 and (
-            'microphone' in device['name'].lower() or 
-            'headset' in device['name'].lower() or
-            'mic' in device['name'].lower()
-        ):
-            print(f"✓ Auto-detected microphone: [{idx}] {device['name']}")
-            return idx
-    
-    return None
+        self.log(f"✓ Total transcriptions: {self.transcription_count}")
+        self.log("✓ Whisper Voice Keyboard stopped")
 
 
 def main():

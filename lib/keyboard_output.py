@@ -24,6 +24,10 @@ class KeyboardTyper:
         self.controller = Controller()
         self.word_mappings = word_mappings or {}
         
+        # Preview mode tracking
+        self.preview_length = 0  # Number of characters in current preview
+        self.last_preview_text = ""
+        
         logger.info(f"Keyboard typer initialized with {len(self.word_mappings)} word mappings")
         for word, replacement in self.word_mappings.items():
             logger.debug(f"  Mapping: {repr(word)} -> {repr(replacement)}")
@@ -228,3 +232,56 @@ class KeyboardTyper:
             logger.debug(f"Pressed Backspace {count} time(s)")
         except Exception as e:
             logger.error(f"Error pressing Backspace: {e}")
+    
+    def type_realtime_preview(self, text: str):
+        """
+        Type realtime preview text (unstable, will be replaced by final)
+        
+        This is for showing instant feedback during speech. The text is typed
+        without word mappings applied, and will be cleared when final transcription
+        arrives or when preview updates.
+        
+        Args:
+            text: Preview text to type
+        """
+        if not text:
+            return
+        
+        # Clear previous preview if it exists
+        if self.preview_length > 0:
+            self.press_backspace(self.preview_length)
+            self.preview_length = 0
+        
+        # Type new preview (no word mappings, just raw text)
+        try:
+            for char in text:
+                self._type_char(char)
+            
+            self.preview_length = len(text)
+            self.last_preview_text = text
+            logger.debug(f"Preview typed: {repr(text)}")
+        
+        except Exception as e:
+            logger.error(f"Error typing preview: {e}")
+            self.preview_length = 0
+    
+    def type_final(self, text: str, delay: float = 0.01):
+        """
+        Type final transcription with word mappings applied
+        
+        This replaces any existing preview and applies word mappings.
+        
+        Args:
+            text: Final transcription text
+            delay: Delay between characters in seconds
+        """
+        # Clear preview if exists
+        if self.preview_length > 0:
+            self.press_backspace(self.preview_length)
+            self.preview_length = 0
+            self.last_preview_text = ""
+        
+        # Type final text with word mappings
+        self.type_text(text, delay)
+        
+        logger.debug(f"Final typed: {repr(text)}")

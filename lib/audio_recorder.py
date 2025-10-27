@@ -184,6 +184,7 @@ class AudioRecorder:
         self.is_recording = False
         self.is_running = False
         self.is_paused = False  # Pause VAD processing (e.g., when CapsLock is OFF)
+        self.cancel_pending_transcriptions = False  # Flag to cancel pending transcriptions
         self.frames = []
         self.silence_count = 0
         self.max_silence_chunks = int(
@@ -246,15 +247,24 @@ class AudioRecorder:
         logger.info(f"✓ Audio recorder stopped (transcriptions: {self.transcription_count})")
     
     def pause(self):
-        """Pause VAD processing (stop listening for speech)"""
+        """Pause VAD processing (stop listening for new speech and cancel any ongoing recording)"""
         self.is_paused = True
-        # If currently recording, stop it
+        self.cancel_pending_transcriptions = True  # Cancel any pending transcriptions
+        
+        # Cancel any ongoing recording - clear buffers
         if self.is_recording:
-            self._stop_recording()
+            logger.debug("Recording cancelled due to pause")
+            self.is_recording = False
+            self.frames.clear()
+            self.silence_count = 0
     
     def resume(self):
         """Resume VAD processing (start listening for speech)"""
         self.is_paused = False
+        self.cancel_pending_transcriptions = False  # Allow transcriptions again
+        
+        # Clear audio buffer to avoid processing old audio
+        self.audio_buffer.clear()
     
     def _auto_detect_microphone(self) -> int:
         """Auto-detect default microphone device"""
@@ -285,7 +295,7 @@ class AudioRecorder:
             if status:
                 logger.warning(f"Audio status: {status}")
             
-            # Skip processing if paused (e.g., CapsLock OFF)
+            # Skip all processing if paused
             if self.is_paused:
                 return
             
@@ -385,12 +395,22 @@ class AudioRecorder:
     
     def _transcribe_final(self, audio: np.ndarray):
         """Transcribe final audio with main model"""
+        # Check if transcription was cancelled
+        if self.cancel_pending_transcriptions:
+            logger.debug("Final transcription cancelled")
+            return
+        
         try:
             segments, info = self.main_model.transcribe(
                 audio,
                 language=self.language,
                 beam_size=self.beam_size
             )
+            
+            # Check again after transcription (in case it was cancelled during processing)
+            if self.cancel_pending_transcriptions:
+                logger.debug("Final transcription cancelled after processing")
+                return
             
             text_parts = []
             for segment in segments:
@@ -422,8 +442,8 @@ class AudioRecorder:
         
         while self.is_running:
             try:
-                # Only process during recording
-                if not self.is_recording or not self.frames:
+                # Only process during recording and not cancelled
+                if not self.is_recording or not self.frames or self.cancel_pending_transcriptions:
                     time.sleep(0.05)
                     continue
                 
@@ -444,6 +464,10 @@ class AudioRecorder:
                     language=self.language,
                     beam_size=self.beam_size_realtime
                 )
+                
+                # Check if cancelled during transcription
+                if self.cancel_pending_transcriptions:
+                    continue
                 
                 text_parts = []
                 for segment in segments:

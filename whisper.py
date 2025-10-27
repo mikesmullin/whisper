@@ -119,13 +119,31 @@ class VoiceKeyboard:
                 notifications_enabled=config.notifications_enabled
             )
         
-        # Setup CapsLock monitoring or hotkey
-        self.capslock_thread = None
-        if config.toggle_listening_shortcut.lower() == "capslock":
-            self.capslock_thread = threading.Thread(
-                target=self._monitor_capslock,
-                daemon=True
-            )
+        # Setup hotkey listener
+        self.hotkey_listener = None
+        if config.toggle_listening_shortcut:
+            from pynput.keyboard import GlobalHotKeys
+            
+            # Parse hotkey combination
+            hotkey_str = config.toggle_listening_shortcut
+            
+            # Convert our format to pynput format
+            # "ctrl+shift+space" -> "<ctrl>+<shift>+<space>"
+            parts = [f"<{part.strip()}>" for part in hotkey_str.split('+')]
+            pynput_hotkey = '+'.join(parts)
+            
+            self.log(f"Registering hotkey: {hotkey_str} -> {pynput_hotkey}")
+            
+            # Use pynput's GlobalHotKeys for reliable hotkey detection
+            def on_activate():
+                logger.debug("Hotkey activated!")
+                self.toggle_listening()
+            
+            hotkeys = {
+                pynput_hotkey: on_activate
+            }
+            
+            self.hotkey_listener = GlobalHotKeys(hotkeys)
         
         self.log("✓ Whisper Voice Keyboard initialized")
     
@@ -152,6 +170,10 @@ class VoiceKeyboard:
     
     def on_realtime_update(self, text: str):
         """Callback for realtime preview updates"""
+        # Don't process if listening is stopped
+        if not self.is_listening:
+            return
+        
         if self.verbose:
             self.log(f"[Preview]: {text}")
         
@@ -161,75 +183,16 @@ class VoiceKeyboard:
     
     def on_final_transcription(self, text: str):
         """Callback for final accurate transcription"""
+        # Don't process if listening is stopped (transcription was cancelled)
+        if not self.is_listening:
+            self.log(f"[Cancelled]: {text}")
+            return
+        
         self.transcription_count += 1
         self.log(f"[Final]: {text}")
         
         # Type final text with word mappings
         self.typer.type_final(text)
-    
-    def _monitor_capslock(self):
-        """Monitor CapsLock state and toggle listening accordingly"""
-        self.log("✓ CapsLock monitoring enabled (CapsLock ON = listening)")
-        
-        if platform.system() == 'Windows':
-            import ctypes
-            VK_CAPITAL = 0x14
-            get_key_state = ctypes.windll.user32.GetKeyState
-            
-            while self.is_running:
-                try:
-                    caps_on = get_key_state(VK_CAPITAL) & 0x0001
-                    
-                    if caps_on and not self.is_listening:
-                        self.start_listening()
-                    elif not caps_on and self.is_listening:
-                        self.stop_listening()
-                    
-                    time.sleep(0.1)  # Check 10 times per second
-                except Exception as e:
-                    logger.error(f"CapsLock monitoring error: {e}")
-                    break
-        
-        elif platform.system() == 'Darwin':  # macOS
-            try:
-                from AppKit import NSEvent, NSEventModifierFlagCapsLock
-                
-                while self.is_running:
-                    try:
-                        caps_on = NSEvent.modifierFlags() & NSEventModifierFlagCapsLock
-                        
-                        if caps_on and not self.is_listening:
-                            self.start_listening()
-                        elif not caps_on and self.is_listening:
-                            self.stop_listening()
-                        
-                        time.sleep(0.1)
-                    except Exception as e:
-                        logger.error(f"CapsLock monitoring error: {e}")
-                        break
-            except ImportError:
-                logger.error("CapsLock monitoring requires PyObjC on macOS")
-                logger.info("Install with: pip install pyobjc-framework-Cocoa")
-        
-        elif platform.system() == 'Linux':
-            import subprocess
-            
-            while self.is_running:
-                try:
-                    result = subprocess.run(['xset', 'q'], capture_output=True, text=True)
-                    caps_on = 'Caps Lock:   on' in result.stdout
-                    
-                    if caps_on and not self.is_listening:
-                        self.start_listening()
-                    elif not caps_on and self.is_listening:
-                        self.stop_listening()
-                    
-                    time.sleep(0.1)
-                except Exception as e:
-                    logger.error(f"CapsLock monitoring error: {e}")
-                    break
-        else:
-            logger.error(f"CapsLock monitoring not supported on {platform.system()}")
     
     def toggle_listening(self):
         """Toggle listening state"""
@@ -284,12 +247,13 @@ class VoiceKeyboard:
         
         # Start audio recorder (in paused state initially)
         self.recorder.start()
-        self.recorder.pause()  # Start paused, user toggles CapsLock to begin
+        self.recorder.pause()  # Start paused, user presses hotkey to begin
         self.log("✓ Audio recorder ready")
         
-        # Start CapsLock monitoring if enabled
-        if self.capslock_thread:
-            self.capslock_thread.start()
+        # Start hotkey listener
+        if self.hotkey_listener:
+            self.hotkey_listener.start()
+            self.log(f"✓ Hotkey monitoring enabled ({self.config.toggle_listening_shortcut} = toggle listening)")
         
         # Start system tray
         if self.tray:
@@ -298,7 +262,7 @@ class VoiceKeyboard:
                 self.tray.notify("Whisper", "Voice keyboard ready")
         
         if self.verbose:
-            self.log("🎙️  Ready! Use CapsLock or system tray to toggle listening... (Ctrl+C to quit)")
+            self.log(f"🎙️  Ready! Press {self.config.toggle_listening_shortcut} or use system tray to toggle listening... (Ctrl+C to quit)")
         else:
             self.log("🎙️  Ready! (Ctrl+C to quit)")
         
@@ -316,6 +280,10 @@ class VoiceKeyboard:
         """Stop the voice keyboard"""
         self.is_running = False
         self.is_listening = False
+        
+        # Stop hotkey listener
+        if self.hotkey_listener:
+            self.hotkey_listener.stop()
         
         # Stop audio recorder
         if self.recorder:

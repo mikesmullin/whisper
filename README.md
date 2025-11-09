@@ -11,7 +11,6 @@ A cross-platform voice keyboard that transcribes your speech into typed text in 
 - **🔇 Dual-VAD System**: WebRTC + Silero for fast and accurate speech detection
 - **⌨️ Configurable Commands**: Map spoken words to keyboard shortcuts
 - **🔔 System Tray Integration**: Background operation with notifications
-- **🔥 CapsLock Control**: Toggle listening by turning CapsLock ON/OFF
 - **📝 Word Mappings**: Convert spoken commands to actions (e.g., "new line" → newline)
 - **📊 Performance Monitoring**: Timestamped logging to measure latency
 
@@ -35,33 +34,10 @@ A cross-platform voice keyboard that transcribes your speech into typed text in 
 Using `uv` (fast Python package installer):
 
 ```bash
-# Clone the repository
-git clone https://github.com/mikesmullin/whisper.git
-cd whisper
-
-# Install using uv with required dependencies
 uv tool install --editable . --with webrtcvad-wheels --with scipy
 ```
 
 This installs the `whisper` command globally on your system with all required dependencies in an isolated environment.
-
-### Alternative Installation Methods
-
-**Using pip:**
-```bash
-# Clone the repository
-git clone https://github.com/mikesmullin/whisper.git
-cd whisper
-
-# Install with all dependencies
-pip install -e . -r requirements.txt
-```
-
-**For development:**
-```bash
-# Install in editable mode with all dependencies
-pip install -e . -r requirements.txt
-```
 
 ### macOS-Specific Setup
 
@@ -95,7 +71,6 @@ pip install pyobjc-framework-Cocoa
 #### Step 4: Test Installation
 
 ```bash
-whisper --generate-config
 whisper --verbose
 # Turn CapsLock ON to start listening
 # Speak something
@@ -124,17 +99,12 @@ whisper --verbose
 whisper --headless
 ```
 
-**Generate default configuration file:**
-```bash
-whisper --generate-config
-```
-
 ### 🎮 Controls
 
 Once running:
 
 1. **Toggle Listening**: Turn **CapsLock ON** to start, **CapsLock OFF** to stop (default)
-   - Alternative: Use hotkey like `Ctrl+Shift+Space` (configurable in `~/.whisper.yaml`)
+   - Alternative: Use hotkey like `Ctrl+Shift+Space` (configurable in `config.yaml`)
 2. **System Tray**: Right-click the tray icon for menu
    - Start/Stop Listening
    - Quit
@@ -154,15 +124,15 @@ Once running:
 
 ### ⚙️ Configuration
 
-Whisper uses a YAML configuration file at `~/.whisper.yaml`. Generate it with:
+Whisper uses a YAML configuration file at `config.yaml` in the workspace root. On first run, if `config.yaml` doesn't exist, it will be automatically created from `config.example.yaml`. You can customize it by copying the example:
 
 ```bash
-whisper --generate-config
+cp config.example.yaml config.yaml
 ```
 
 #### Customizing Word Mappings
 
-Edit `~/.whisper.yaml` to add your own voice commands:
+Edit `config.yaml` to add your own voice commands:
 
 ```yaml
 word_mappings:
@@ -219,10 +189,9 @@ transcription:
 | Option | Description | Default |
 |--------|-------------|---------|
 | `-m, --mic N` | Microphone device index | Auto-detect |
-| `-c, --config FILE` | Configuration file path | `~/.whisper.yaml` |
+| `-c, --config FILE` | Configuration file path | `config.yaml` |
 | `-v, --verbose` | Show transcriptions in console | Off |
 | `--headless` | Run without system tray | Off |
-| `--generate-config` | Create default config and exit | - |
 | `-h, --help` | Show help message | - |
 
 ### 🎤 Finding Your Microphone Device
@@ -284,7 +253,7 @@ whisper --mic 1
 
 ### Hotkeys Not Working
 - Some desktop environments may conflict with global hotkeys
-- Try changing the hotkey in `~/.whisper.yaml`
+- Try changing the hotkey in `config.yaml`
 - Run with `sudo` on Linux if needed for global hotkey access
 
 ### System Tray Icon Not Showing

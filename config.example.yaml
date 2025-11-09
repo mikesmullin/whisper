@@ -1,4 +1,4 @@
-# Whisper Voice Keyboard Configuration (Refactored)
+# Whisper Voice Keyboard Configuration
 # Place this file at ~/.whisper.yaml to customize settings
 
 audio:

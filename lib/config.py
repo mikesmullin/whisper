@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONFIG = {
     "audio": {
         "sample_rate": 16000,
-        "mic_device": None,  # Auto-detect if None
+        "mic_device": None,  # Auto-detect if None, or use device ID (int)
         "buffer_size": 512,  # Silero requires >=512, WebRTC uses first 480
         "min_utterance_duration": 1.1,  # Minimum speech duration (seconds)
         "post_speech_silence_duration": 0.6,  # Silence before finalizing (seconds)
@@ -192,8 +192,8 @@ class Config:
         return self.get('audio.buffer_size', 512)
     
     @property
-    def mic_device(self) -> Optional[int]:
-        """Get microphone device index"""
+    def mic_device(self):
+        """Get microphone device (can be int ID or str name)"""
         return self.get('audio.mic_device')
     
     @property

@@ -47,7 +47,7 @@ DEFAULT_CONFIG = {
         "toggle_listening": "ctrl+shift+space",  # Hotkey to toggle listening (e.g., "ctrl+shift+space", "ctrl+alt+l")
     },
     "keyboard": {
-        "typing_delay_ms": 10,  # Milliseconds delay between each keystroke (prevents skipping in some inputs)
+        "typing_delay_ms": 20,  # Milliseconds delay between each keystroke (prevents skipping in some form input contexts)
     },
     "word_mappings": {
         "new line": "\n",

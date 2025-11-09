@@ -20,7 +20,6 @@ import numpy as np
 # Import custom modules
 from lib.config import Config
 from lib.keyboard_output import KeyboardTyper
-from lib.tray import SystemTray, TRAY_AVAILABLE
 from lib.audio_recorder import AudioRecorder
 from lib.sound import SoundPlayer
 
@@ -33,8 +32,7 @@ class VoiceKeyboard:
     def __init__(
         self,
         config: Config,
-        verbose: bool = False,
-        headless: bool = False
+        verbose: bool = False
     ):
         """
         Initialize voice keyboard
@@ -42,11 +40,9 @@ class VoiceKeyboard:
         Args:
             config: Configuration object
             verbose: Print transcriptions to stdout
-            headless: Run without system tray
         """
         self.config = config
         self.verbose = verbose or config.verbose_logging
-        self.headless = headless
         
         self.is_running = False
         self.is_listening = False
@@ -109,15 +105,6 @@ class VoiceKeyboard:
             # Logging
             verbose=self.verbose
         )
-        
-        # Initialize system tray (if not headless)
-        self.tray = None
-        if not headless and TRAY_AVAILABLE and config.system_tray_enabled:
-            self.tray = SystemTray(
-                on_toggle=self.toggle_listening,
-                on_quit=self.quit,
-                notifications_enabled=config.notifications_enabled
-            )
         
         # Setup hotkey listener
         self.hotkey_listener = None
@@ -212,14 +199,9 @@ class VoiceKeyboard:
         # Resume audio recorder (unpause VAD)
         self.recorder.resume()
         
-        # Play sound instead of showing notification
+        # Play sound
         if self.config.sounds_enabled:
             self.sound.play(self.config.sound_on_listening_start)
-        
-        # Update tray icon (without notification)
-        if self.tray:
-            self.tray.set_listening(True)
-            self.tray.update_menu(True)
     
     def stop_listening(self):
         """Stop listening to microphone"""
@@ -232,14 +214,9 @@ class VoiceKeyboard:
         # Pause audio recorder (stop VAD processing)
         self.recorder.pause()
         
-        # Play sound instead of showing notification
+        # Play sound
         if self.config.sounds_enabled:
             self.sound.play(self.config.sound_on_listening_stop)
-        
-        # Update tray icon (without notification)
-        if self.tray:
-            self.tray.set_listening(False)
-            self.tray.update_menu(False)
     
     def start(self):
         """Start the voice keyboard"""
@@ -255,14 +232,8 @@ class VoiceKeyboard:
             self.hotkey_listener.start()
             self.log(f"✓ Hotkey monitoring enabled ({self.config.toggle_listening_shortcut} = toggle listening)")
         
-        # Start system tray
-        if self.tray:
-            self.tray.run_detached()
-            if self.config.get('notifications.show_on_start', True):
-                self.tray.notify("Whisper", "Voice keyboard ready")
-        
         if self.verbose:
-            self.log(f"🎙️  Ready! Press {self.config.toggle_listening_shortcut} or use system tray to toggle listening... (Ctrl+C to quit)")
+            self.log(f"🎙️  Ready! Press {self.config.toggle_listening_shortcut} to toggle listening... (Ctrl+C to quit)")
         else:
             self.log("🎙️  Ready! (Ctrl+C to quit)")
         
@@ -289,10 +260,6 @@ class VoiceKeyboard:
         if self.recorder:
             self.recorder.stop()
         
-        # Stop tray
-        if self.tray:
-            self.tray.stop()
-        
         self.log(f"✓ Total transcriptions: {self.transcription_count}")
         self.log("✓ Whisper Voice Keyboard stopped")
 
@@ -309,9 +276,6 @@ Examples:
   
   # Run in verbose mode (show transcriptions)
   whisper --verbose
-  
-  # Run without system tray
-  whisper --headless
   
   # Use specific microphone device
   whisper --mic 1
@@ -336,12 +300,6 @@ Examples:
         '-v', '--verbose',
         action='store_true',
         help='Print transcriptions to stdout'
-    )
-    
-    parser.add_argument(
-        '--headless',
-        action='store_true',
-        help='Run without system tray'
     )
     
     args = parser.parse_args()
@@ -381,8 +339,7 @@ Examples:
     # Create voice keyboard
     voice_keyboard = VoiceKeyboard(
         config=config,
-        verbose=args.verbose,
-        headless=args.headless
+        verbose=args.verbose
     )
     
     # Setup signal handler

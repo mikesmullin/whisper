@@ -10,7 +10,7 @@ A cross-platform voice keyboard that transcribes your speech into typed text in 
 - **🎯 Accurate Final Text**: Large model refines transcription after you finish speaking
 - **🔇 Dual-VAD System**: WebRTC + Silero for fast and accurate speech detection
 - **⌨️ Configurable Commands**: Map spoken words to keyboard shortcuts
-- **🔔 System Tray Integration**: Background operation with notifications
+- **� Audio Feedback**: Sound effects for listening state changes
 - **📝 Word Mappings**: Convert spoken commands to actions (e.g., "new line" → newline)
 - **📊 Performance Monitoring**: Timestamped logging to measure latency
 
@@ -94,21 +94,13 @@ whisper
 whisper --verbose
 ```
 
-**Run without system tray (headless):**
-```bash
-whisper --headless
-```
-
 ### 🎮 Controls
 
 Once running:
 
 1. **Toggle Listening**: Turn **CapsLock ON** to start, **CapsLock OFF** to stop (default)
    - Alternative: Use hotkey like `Ctrl+Shift+Space` (configurable in `config.yaml`)
-2. **System Tray**: Right-click the tray icon for menu
-   - Start/Stop Listening
-   - Quit
-3. **Exit**: Press `Ctrl+C` or use tray menu
+2. **Exit**: Press `Ctrl+C`
 
 ### 🎙️ How It Works
 
@@ -191,7 +183,6 @@ transcription:
 | `-m, --mic N` | Microphone device index | Auto-detect |
 | `-c, --config FILE` | Configuration file path | `config.yaml` |
 | `-v, --verbose` | Show transcriptions in console | Off |
-| `--headless` | Run without system tray | Off |
 | `-h, --help` | Show help message | - |
 
 ### 🎤 Finding Your Microphone Device
@@ -256,44 +247,34 @@ whisper --mic 1
 - Try changing the hotkey in `config.yaml`
 - Run with `sudo` on Linux if needed for global hotkey access
 
-### System Tray Icon Not Showing
-- Install required dependencies: `pip install pystray pillow`
-- Run in headless mode: `whisper --headless`
-- Check desktop environment compatibility
-
 ### Transcription Quality Issues
 - Speak clearly and at a moderate pace
 - Reduce background noise
 - Adjust `min_utterance_duration` in config
-- Consider upgrading to a larger Whisper model (edit `whisper.py`)
+- Consider upgrading to a larger Whisper model (edit config file)
 
 ## 🎨 Customization
 
 ### Using a Different Whisper Model
 
-Edit `whisper.py` and change the model size:
+Edit `config.yaml` and change the model size:
 
-```python
-# Options: tiny, base, small, medium, large
-self.whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+```yaml
+transcription:
+  model: "base"  # Options: tiny, base, small, medium, large-v2, large-v3
+  device: "cpu"  # or "cuda" for GPU
+  compute_type: "int8"  # int8, float16, float32
 ```
 
 Larger models are more accurate but slower.
 
-### Adding Custom Notifications
-
-Modify `lib/tray.py` to customize notification behavior.
-
 ### Different Languages
 
-Edit `whisper.py` and change the language parameter:
+Edit `config.yaml` and change the language parameter:
 
-```python
-segments, info = self.whisper_model.transcribe(
-    audio,
-    language="es",  # Spanish, French (fr), German (de), etc.
-    beam_size=5
-)
+```yaml
+transcription:
+  language: "es"  # Spanish, French (fr), German (de), etc.
 ```
 
 ## 🙏 Acknowledgments
@@ -302,4 +283,3 @@ segments, info = self.whisper_model.transcribe(
 - [faster-whisper](https://github.com/guillaumekln/faster-whisper) for optimized inference
 - [Silero VAD](https://github.com/snakers4/silero-vad) for voice activity detection
 - [pynput](https://github.com/moses-palmer/pynput) for keyboard control
-- [pystray](https://github.com/moses-palmer/pystray) for system tray integration

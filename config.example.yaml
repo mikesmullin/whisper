@@ -126,17 +126,6 @@ word_mappings:
   # find: "ctrl+f"
   # my email: "your.email@example.com"
 
-notifications:
-  # Enable/disable system notifications
-  enabled: true
-  
-  # Show notification when app starts
-  show_on_start: true
-  
-  # Show notification when toggling listening on/off
-  # Note: When sounds are enabled, sounds play instead of toggle notifications
-  show_on_toggle: true
-
 sounds:
   # Enable/disable sound playback
   enabled: true
@@ -146,10 +135,6 @@ sounds:
   
   # Sound file to play when listening stops (CapsLock OFF)
   on_listening_stop: "sfx/off.wav"
-
-system_tray:
-  # Enable/disable system tray icon
-  enabled: true
 
 logging:
   # Add timestamps to console output for performance monitoring

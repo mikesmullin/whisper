@@ -68,18 +68,10 @@ DEFAULT_CONFIG = {
         "now cut": "ctrl+x",
         "now save": "ctrl+s",
     },
-    "notifications": {
-        "enabled": True,
-        "show_on_start": True,
-        "show_on_toggle": True,
-    },
     "sounds": {
         "enabled": True,
         "on_listening_start": "sfx/on.wav",
         "on_listening_stop": "sfx/off.wav",
-    },
-    "system_tray": {
-        "enabled": True,
     },
     "logging": {
         "timestamps": True,  # Add timestamps to log output
@@ -303,16 +295,6 @@ class Config:
     def toggle_off_shortcut(self) -> str:
         """Get keyboard shortcut to toggle listening off (legacy support)"""
         return self.toggle_listening_shortcut
-    
-    @property
-    def notifications_enabled(self) -> bool:
-        """Check if notifications are enabled"""
-        return self.get('notifications.enabled', True)
-    
-    @property
-    def system_tray_enabled(self) -> bool:
-        """Check if system tray is enabled"""
-        return self.get('system_tray.enabled', True)
     
     @property
     def timestamps_enabled(self) -> bool:

@@ -313,9 +313,6 @@ Examples:
   # Run without system tray
   whisper --headless
   
-  # Generate default config file
-  whisper --generate-config
-  
   # Use specific microphone device
   whisper --mic 1
         """
@@ -332,7 +329,7 @@ Examples:
         '-c', '--config',
         type=str,
         metavar='FILE',
-        help='Configuration file path (default: ~/.whisper.yaml)'
+        help='Configuration file path (default: config.yaml in workspace root)'
     )
     
     parser.add_argument(
@@ -345,12 +342,6 @@ Examples:
         '--headless',
         action='store_true',
         help='Run without system tray'
-    )
-    
-    parser.add_argument(
-        '--generate-config',
-        action='store_true',
-        help='Generate default configuration file and exit'
     )
     
     args = parser.parse_args()
@@ -371,18 +362,21 @@ Examples:
     config_path = Path(args.config) if args.config else None
     config = Config(config_path)
     
-    # Override mic device if specified
-    if args.mic is not None:
-        config.config['audio']['mic_device'] = args.mic
-    
-    # Generate config and exit if requested
-    if args.generate_config:
+    # Auto-generate config.yaml if it doesn't exist
+    if not config.config_path.exists():
+        print(f"No configuration file found at {config.config_path}")
+        print(f"Generating default configuration...")
         if config.save_default_config():
             print(f"✓ Default configuration saved to {config.config_path}")
             print(f"  Edit this file to customize settings")
+            # Reload config after creating it
+            config = Config(config_path)
         else:
-            print(f"✗ Failed to save configuration")
-        sys.exit(0)
+            print(f"✗ Failed to save configuration, using defaults")
+    
+    # Override mic device if specified
+    if args.mic is not None:
+        config.config['audio']['mic_device'] = args.mic
     
     # Create voice keyboard
     voice_keyboard = VoiceKeyboard(

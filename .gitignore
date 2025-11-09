@@ -58,6 +58,7 @@ Thumbs.db
 # Project specific
 *.jsonl
 transcript.jsonl
+config.yaml
 
 
 PROMPT.md

@@ -96,10 +96,15 @@ class Config:
         Initialize configuration
         
         Args:
-            config_path: Path to config file. If None, uses ~/.whisper.yaml
+            config_path: Path to config file. If None, uses config.yaml in workspace root
         """
         if config_path is None:
-            config_path = Path.home() / ".whisper.yaml"
+            # Get the directory where this config.py file is located
+            lib_dir = Path(__file__).parent
+            # Get workspace root (parent of lib/)
+            workspace_root = lib_dir.parent
+            # Use config.yaml in workspace root
+            config_path = workspace_root / "config.yaml"
         
         self.config_path = config_path
         self.config = self._load_config()

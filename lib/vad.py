@@ -56,7 +56,8 @@ class VoiceActivityDetector:
             model='silero_vad',
             force_reload=False,
             verbose=False,
-            onnx=silero_use_onnx
+            onnx=silero_use_onnx,
+            trust_repo=True
         )
         logger.info("✓ Silero VAD loaded")
         

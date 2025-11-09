@@ -62,7 +62,7 @@ Without this, whisper won't be able to type text.
 4. **Enable** the checkbox next to it
 5. **IMPORTANT**: Completely quit and restart your terminal (Cmd+Q, then relaunch)
 
-#### Step 3: Install macOS-specific dependencies (for CapsLock monitoring)
+#### Step 3: Install macOS-specific dependencies
 
 ```bash
 pip install pyobjc-framework-Cocoa
@@ -72,9 +72,9 @@ pip install pyobjc-framework-Cocoa
 
 ```bash
 whisper --verbose
-# Turn CapsLock ON to start listening
+# Press Ctrl+Shift+Space to start listening
 # Speak something
-# Turn CapsLock OFF to stop listening
+# Press Ctrl+Shift+Space to stop listening
 # Press Ctrl+C to quit
 ```
 
@@ -98,16 +98,15 @@ whisper --verbose
 
 Once running:
 
-1. **Toggle Listening**: Turn **CapsLock ON** to start, **CapsLock OFF** to stop (default)
-   - Alternative: Use hotkey like `Ctrl+Shift+Space` (configurable in `config.yaml`)
+1. **Toggle Listening**: Press **Ctrl+Shift+Space** to start/stop (default hotkey, configurable in `config.yaml`)
 2. **Exit**: Press `Ctrl+C`
 
 ### 🎙️ How It Works
 
-1. **Turn CapsLock ON** → Listening starts
+1. **Press Ctrl+Shift+Space** → Listening starts
 2. **Start speaking** → See words appear in real-time as you speak (preview mode)
 3. **Stop speaking** → After brief pause (~0.6s), preview is replaced with accurate final transcription
-4. **Turn CapsLock OFF** → Listening stops
+4. **Press Ctrl+Shift+Space** → Listening stops
 
 **Performance**: 
 - Preview appears in ~300ms (instant feedback!)

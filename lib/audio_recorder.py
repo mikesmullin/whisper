@@ -183,7 +183,7 @@ class AudioRecorder:
         # Recording state
         self.is_recording = False
         self.is_running = False
-        self.is_paused = False  # Pause VAD processing (e.g., when CapsLock is OFF)
+        self.is_paused = False  # Pause VAD processing (e.g., when hotkey toggles listening off)
         self.cancel_pending_transcriptions = False  # Flag to cancel pending transcriptions
         self.frames = []
         self.silence_count = 0

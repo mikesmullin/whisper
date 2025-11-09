@@ -277,7 +277,7 @@ class Config:
     @property
     def toggle_listening_shortcut(self) -> str:
         """Get keyboard shortcut to toggle listening"""
-        return self.get('shortcuts.toggle_listening', 'capslock')
+        return self.get('shortcuts.toggle_listening', 'ctrl+shift+space')
     
     @property
     def silence_chunks(self) -> int:

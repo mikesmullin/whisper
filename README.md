@@ -180,24 +180,27 @@ transcription:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-m, --mic N` | Microphone device index | Auto-detect |
 | `-c, --config FILE` | Configuration file path | `config.yaml` |
 | `-v, --verbose` | Show transcriptions in console | Off |
 | `-h, --help` | Show help message | - |
 
-### 🎤 Finding Your Microphone Device
+### 🎤 Microphone Setup
 
-If auto-detection doesn't work, find your device ID:
+Configure your system's default microphone:
 
-```python
-import sounddevice as sd
-print(sd.query_devices())
-```
-
-Then use it:
+**Linux (PulseAudio/PipeWire):**
 ```bash
-whisper --mic 1
+# List available sources
+pactl list sources short
+
+# Set default microphone
+pactl set-default-source <source-name>
 ```
+
+**Windows/macOS:**
+Set your default microphone in system sound settings.
+
+The application will automatically use your system's default microphone.
 
 ## 🔍 How It Works
 
@@ -211,8 +214,8 @@ whisper --mic 1
 
 ### Microphone Not Detected
 - Check microphone permissions in system settings
-- Try specifying device ID with `--mic N`
-- List devices: `python -c "import sounddevice; print(sounddevice.query_devices())"`
+- Verify your system's default microphone is set correctly
+- Test microphone with other applications to ensure it works
 
 ### macOS-Specific Issues
 

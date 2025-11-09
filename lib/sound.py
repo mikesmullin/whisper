@@ -4,6 +4,7 @@ Sound playback for audio feedback
 
 import logging
 import os
+import subprocess
 import threading
 from typing import Optional
 
@@ -40,8 +41,25 @@ class SoundPlayer:
                     self._player = 'playsound'
                     logger.debug("Using playsound for audio playback")
                 except ImportError:
-                    logger.warning("No sound library available (winsound/pygame/playsound)")
-                    self.enabled = False
+                    # Try paplay (PulseAudio player) first, then aplay (ALSA)
+                    try:
+                        result = subprocess.run(['which', 'paplay'], 
+                                              capture_output=True, timeout=1)
+                        if result.returncode == 0:
+                            self._player = 'paplay'
+                            logger.debug("Using paplay for audio playback")
+                        else:
+                            result = subprocess.run(['which', 'aplay'], 
+                                                  capture_output=True, timeout=1)
+                            if result.returncode == 0:
+                                self._player = 'aplay'
+                                logger.debug("Using aplay for audio playback")
+                            else:
+                                logger.warning("No sound library available (winsound/pygame/playsound/paplay/aplay)")
+                                self.enabled = False
+                    except Exception:
+                        logger.warning("No sound library available (winsound/pygame/playsound/paplay/aplay)")
+                        self.enabled = False
     
     def play(self, filepath: str, async_play: bool = True):
         """
@@ -84,6 +102,14 @@ class SoundPlayer:
             elif self._player == 'playsound':
                 from playsound import playsound
                 playsound(filepath)
+            elif self._player == 'paplay':
+                # Use paplay (PulseAudio player) on Linux
+                subprocess.run(['paplay', filepath], 
+                             capture_output=True, timeout=2)
+            elif self._player == 'aplay':
+                # Use aplay (ALSA player) on Linux
+                subprocess.run(['aplay', '-q', filepath], 
+                             capture_output=True, timeout=2)
             
             logger.debug(f"Played sound: {filepath}")
         except Exception as e:

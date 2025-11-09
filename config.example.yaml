@@ -9,8 +9,9 @@ audio:
   # Silero VAD requires at least 512 samples, WebRTC uses first 480
   buffer_size: 512
   
-  # Microphone device index (null for auto-detect)
-  # Find device IDs: python -c "import sounddevice; print(sounddevice.query_devices())"
+  # Microphone device index (null for auto-detect, uses system default)
+  # For Linux/PulseAudio: Set system default with 'pactl set-default-source <device>'
+  # For Windows/macOS: Configure in system sound settings
   mic_device: null
   
   # Minimum duration of speech to transcribe (seconds)

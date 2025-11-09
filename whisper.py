@@ -6,16 +6,35 @@ A cross-platform voice keyboard that transcribes speech to typed text.
 Refactored to use dual-model system with realtime preview.
 """
 
+# Preload CUDA/cuDNN libraries if available (Linux/CUDA workaround)
+# This must happen before importing any libraries that use CUDA
+import ctypes
+import sys
+from pathlib import Path
+
+try:
+    # Find cuDNN libraries in site-packages
+    site_packages = Path(sys.executable).parent.parent / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+    cudnn_lib = site_packages / "nvidia" / "cudnn" / "lib"
+    
+    if cudnn_lib.exists():
+        # Preload cuDNN libraries to make them available to C++ extensions
+        for lib_name in ["libcudnn.so.9", "libcudnn_ops.so.9", "libcudnn_cnn.so.9"]:
+            lib_path = cudnn_lib / lib_name
+            if lib_path.exists():
+                ctypes.CDLL(str(lib_path), mode=ctypes.RTLD_GLOBAL)
+except Exception:
+    pass  # Silently ignore if cuDNN not available
+
 import argparse
 import logging
 import signal
-import sys
 import threading
 import time
 import platform
-from pathlib import Path
 
 import numpy as np
+import sounddevice as sd
 
 # Import custom modules
 from lib.config import Config
@@ -276,17 +295,7 @@ Examples:
   
   # Run in verbose mode (show transcriptions)
   whisper --verbose
-  
-  # Use specific microphone device
-  whisper --mic 1
         """
-    )
-    
-    parser.add_argument(
-        '-m', '--mic',
-        type=int,
-        metavar='N',
-        help='Microphone device index (auto-detect if not provided)'
     )
     
     parser.add_argument(
@@ -331,10 +340,6 @@ Examples:
             config = Config(config_path)
         else:
             print(f"✗ Failed to save configuration, using defaults")
-    
-    # Override mic device if specified
-    if args.mic is not None:
-        config.config['audio']['mic_device'] = args.mic
     
     # Create voice keyboard
     voice_keyboard = VoiceKeyboard(

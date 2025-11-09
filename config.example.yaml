@@ -131,10 +131,10 @@ sounds:
   # Enable/disable sound playback
   enabled: true
   
-  # Sound file to play when listening starts (CapsLock ON)
+  # Sound file to play when listening starts (hotkey pressed)
   on_listening_start: "sfx/on.wav"
   
-  # Sound file to play when listening stops (CapsLock OFF)
+  # Sound file to play when listening stops (hotkey pressed)
   on_listening_stop: "sfx/off.wav"
 
 logging:

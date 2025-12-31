@@ -276,6 +276,7 @@ class KeyboardTyper:
         Type final transcription with word mappings applied
         
         This replaces any existing preview and applies word mappings.
+        A trailing space is appended to prevent word conjoining when dictation resumes.
         
         Args:
             text: Final transcription text
@@ -289,5 +290,9 @@ class KeyboardTyper:
         
         # Type final text with word mappings
         self.type_text(text, delay)
+        
+        # Append a space after final transcription to prevent word conjoining
+        # when dictation resumes after a pause
+        self._type_char(' ')
         
         logger.debug(f"Final typed: {repr(text)}")

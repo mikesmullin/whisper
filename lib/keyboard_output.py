@@ -197,7 +197,15 @@ class KeyboardTyper:
             char: Character to type
         """
         try:
-            self.controller.type(char)
+            # For space character, use explicit press/release with delay
+            # to ensure reliable key-up event delivery to SDL2 and similar apps
+            if char == ' ':
+                self.controller.press(Key.space)
+                time.sleep(0.02)  # 20ms hold time for reliable detection
+                self.controller.release(Key.space)
+                time.sleep(0.02)  # 20ms after release for event propagation
+            else:
+                self.controller.type(char)
             # Add delay between keystrokes to prevent skipping in some inputs
             if self.typing_delay_s > 0:
                 time.sleep(self.typing_delay_s)

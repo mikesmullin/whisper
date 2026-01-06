@@ -79,7 +79,8 @@ class VoiceKeyboard:
         # Initialize keyboard typer
         self.typer = KeyboardTyper(
             word_mappings=config.word_mappings,
-            typing_delay_ms=config.typing_delay_ms
+            typing_delay_ms=config.typing_delay_ms,
+            key_hold_ms=config.key_hold_ms
         )
         
         # Initialize audio recorder with callbacks

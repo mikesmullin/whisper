@@ -48,6 +48,7 @@ DEFAULT_CONFIG = {
     },
     "keyboard": {
         "typing_delay_ms": 20,  # Milliseconds delay between each keystroke (prevents skipping in some form input contexts)
+        "key_hold_ms": 20,  # Milliseconds to hold key down before release (for SDL2/game input compatibility)
     },
     "word_mappings": {
         "new line": "\n",
@@ -315,6 +316,11 @@ class Config:
     def typing_delay_ms(self) -> int:
         """Get typing delay in milliseconds between keystrokes"""
         return self.get('keyboard.typing_delay_ms', 10)
+    
+    @property
+    def key_hold_ms(self) -> int:
+        """Get key hold duration in milliseconds (time between press and release)"""
+        return self.get('keyboard.key_hold_ms', 20)
     
     @property
     def sounds_enabled(self) -> bool:

@@ -14,18 +14,21 @@ logger = logging.getLogger(__name__)
 class KeyboardTyper:
     """Types transcribed text using keyboard simulation"""
     
-    def __init__(self, word_mappings: Optional[Dict[str, str]] = None, typing_delay_ms: int = 10):
+    def __init__(self, word_mappings: Optional[Dict[str, str]] = None, typing_delay_ms: int = 10, key_hold_ms: int = 20):
         """
         Initialize keyboard typer
         
         Args:
             word_mappings: Dictionary mapping spoken words to keyboard inputs
             typing_delay_ms: Delay in milliseconds between each keystroke
+            key_hold_ms: Delay in milliseconds between key press and release (for SDL2 compatibility)
         """
         self.controller = Controller()
         self.word_mappings = word_mappings or {}
         self.typing_delay_ms = typing_delay_ms
         self.typing_delay_s = typing_delay_ms / 1000.0  # Convert to seconds
+        self.key_hold_ms = key_hold_ms
+        self.key_hold_s = key_hold_ms / 1000.0  # Convert to seconds
         
         # Preview mode tracking
         self.preview_length = 0  # Number of characters in current preview
@@ -191,21 +194,28 @@ class KeyboardTyper:
     
     def _type_char(self, char: str):
         """
-        Type a single character, handling special characters
+        Type a single character using explicit press/release for SDL2 compatibility
         
         Args:
             char: Character to type
         """
         try:
-            # For space character, use explicit press/release with delay
-            # to ensure reliable key-up event delivery to SDL2 and similar apps
+            # Use explicit press/release with configurable hold time
+            # to ensure reliable key event delivery to SDL2 and similar apps
             if char == ' ':
                 self.controller.press(Key.space)
-                time.sleep(0.02)  # 20ms hold time for reliable detection
-                self.controller.release(Key.space)
-                time.sleep(0.02)  # 20ms after release for event propagation
             else:
-                self.controller.type(char)
+                self.controller.press(char)
+            
+            # Hold the key for reliable detection
+            if self.key_hold_s > 0:
+                time.sleep(self.key_hold_s)
+            
+            if char == ' ':
+                self.controller.release(Key.space)
+            else:
+                self.controller.release(char)
+            
             # Add delay between keystrokes to prevent skipping in some inputs
             if self.typing_delay_s > 0:
                 time.sleep(self.typing_delay_s)

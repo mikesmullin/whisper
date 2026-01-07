@@ -73,7 +73,10 @@ class VoiceKeyboard:
         self.transcription_count = 0
         
         # Initialize sound player
-        self.sound = SoundPlayer(enabled=config.sounds_enabled)
+        self.sound = SoundPlayer(
+            enabled=config.sounds_enabled,
+            base_path=config.config_path.parent
+        )
         
         # Initialize keyboard typer
         # Initialize keyboard typer

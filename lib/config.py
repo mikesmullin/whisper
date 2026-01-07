@@ -46,6 +46,12 @@ DEFAULT_CONFIG = {
     "shortcuts": {
         "toggle_listening": "ctrl+shift+space",  # Hotkey to toggle listening (e.g., "ctrl+shift+space", "ctrl+alt+l")
     },
+    "agent": {
+        "enabled": True,  # Enable agent mode (double-tap hotkey to activate)
+        "command_template": 'subd -t ada "$PROMPT"',  # Shell command template ($PROMPT replaced with transcription)
+        "buffer_timeout": 2.0,  # Seconds of silence before sending buffered text to command
+        "double_tap_window": 0.5,  # Seconds within which a second tap counts as double-tap
+    },
     "keyboard": {
         "typing_delay_ms": 20,  # Milliseconds delay between each keystroke (prevents skipping in some form input contexts)
         "key_hold_ms": 20,  # Milliseconds to hold key down before release (for SDL2/game input compatibility)
@@ -73,6 +79,8 @@ DEFAULT_CONFIG = {
         "enabled": True,
         "on_listening_start": "sfx/on.wav",
         "on_listening_stop": "sfx/off.wav",
+        "on_agent_mode": "sfx/agent.wav",
+        "listening_state_delay_ms": 500,
     },
     "logging": {
         "timestamps": True,  # Add timestamps to log output
@@ -336,3 +344,34 @@ class Config:
     def sound_on_listening_stop(self) -> str:
         """Get sound file path for listening stop"""
         return self.get('sounds.on_listening_stop', 'sfx/off.wav')
+
+    # Agent mode properties
+    @property
+    def agent_enabled(self) -> bool:
+        """Check if agent mode is enabled"""
+        return self.get('agent.enabled', True)
+
+    @property
+    def agent_command_template(self) -> str:
+        """Get agent mode shell command template"""
+        return self.get('agent.command_template', 'subd -t ada "$PROMPT"')
+
+    @property
+    def agent_buffer_timeout(self) -> float:
+        """Get agent mode buffer timeout in seconds"""
+        return self.get('agent.buffer_timeout', 2.0)
+
+    @property
+    def agent_double_tap_window(self) -> float:
+        """Get double-tap detection window in seconds"""
+        return self.get('agent.double_tap_window', 1.0)
+
+    @property
+    def sound_on_agent_mode(self) -> str:
+        """Get sound file path for agent mode activation"""
+        return self.get('sounds.on_agent_mode', 'sfx/agent.wav')
+
+    @property
+    def listening_state_delay_ms(self) -> int:
+        """Get delay in ms before audio resumes/pauses after listening state changes"""
+        return self.get('sounds.listening_state_delay_ms', 500)

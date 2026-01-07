@@ -84,7 +84,26 @@ shortcuts:
   # Toggle listening on/off
   # Hotkey combination to start/stop listening
   # Examples: "ctrl+shift+space", "ctrl+alt+l", "alt+space"
+  # Single press: toggle ON/OFF
+  # Double press (within 1 second): rotate mode (LISTEN ↔ AGENT)
   toggle_listening: "ctrl+shift+space"
+
+agent:
+  # Agent mode: transcribe speech to shell commands instead of keyboard
+  # Enable/disable agent mode functionality
+  enabled: true
+  
+  # Shell command template to execute with transcribed text
+  # $PROMPT will be replaced with the transcribed text
+  command_template: 'subd -t ada "$PROMPT"'
+  
+  # Seconds of silence before buffered text is sent to the command
+  # Text is accumulated until this timeout, then the command is executed
+  buffer_timeout: 2.0
+  
+  # Seconds within which a second hotkey press counts as a double-tap
+  # Double-tap rotates between LISTEN and AGENT modes
+  double_tap_window: 0.5
 
 keyboard:
   # Delay between each keystroke in milliseconds

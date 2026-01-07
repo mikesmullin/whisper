@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess
 import threading
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -14,15 +15,17 @@ logger = logging.getLogger(__name__)
 class SoundPlayer:
     """Plays sound files for user feedback"""
     
-    def __init__(self, enabled: bool = True):
+    def __init__(self, enabled: bool = True, base_path: Optional[Path] = None):
         """
         Initialize sound player
         
         Args:
             enabled: Whether sound playback is enabled
+            base_path: Base directory for resolving relative sound file paths
         """
         self.enabled = enabled
         self._player = None
+        self.base_path = base_path or Path.cwd()
         
         # Try to import a sound library
         try:
@@ -64,11 +67,18 @@ class SoundPlayer:
     def play(self, filepath: str, async_play: bool = True):
         """
         Play a sound file
-        
-        Args:
-            filepath: Path to the .wav file
+         (can be relative or absolute)
             async_play: Whether to play asynchronously (non-blocking)
         """
+        if not self.enabled or not self._player:
+            return
+        
+        # Resolve path: if relative, resolve relative to base_path
+        filepath_obj = Path(filepath)
+        if not filepath_obj.is_absolute():
+            filepath_obj = self.base_path / filepath_obj
+        
+        filepath = str(filepath_obj)
         if not self.enabled or not self._player:
             return
         

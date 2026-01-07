@@ -99,7 +99,31 @@ whisper --verbose
 Once running:
 
 1. **Toggle Listening**: Press **Ctrl+Shift+Space** to start/stop (default hotkey, configurable in `config.yaml`)
-2. **Exit**: Press `Ctrl+C`
+2. **Switch Mode**: Double-press **Ctrl+Shift+Space** (2x within 1 second) to rotate between LISTEN and AGENT modes
+3. **Exit**: Press `Ctrl+C`
+
+### 🎭 Modes
+
+Whisper supports two listening modes:
+
+#### LISTEN Mode (Default)
+- Transcribes speech directly to keyboard input
+- Words appear in the active application as you speak
+- Use for dictation, writing, coding, etc.
+
+#### AGENT Mode
+- Transcribes speech to a shell command instead of keyboard
+- Text is buffered until 2 seconds of silence
+- Then executes a configurable shell command with the transcribed text
+- Shell output is passed through to stdout for visibility
+- Perfect for voice-controlled AI assistants, automation, etc.
+
+**Example use case**: Configure `subd -t ada "$PROMPT"` to send voice commands to an AI agent:
+```yaml
+agent:
+  command_template: 'subd -t ada "$PROMPT"'
+  buffer_timeout: 2.0
+```
 
 ### 🎙️ How It Works
 
@@ -174,6 +198,33 @@ transcription:
   model: "medium"  # Faster than large-v2
   realtime_model: "tiny"  # Minimal overhead
 ```
+
+#### Agent Mode Configuration
+
+Configure the AGENT mode for voice-controlled shell commands:
+
+```yaml
+agent:
+  # Enable/disable agent mode (double-tap to activate)
+  enabled: true
+  
+  # Shell command template - $PROMPT is replaced with transcribed text
+  command_template: 'subd -t ada "$PROMPT"'
+  
+  # Seconds of silence before sending buffered text to command
+  buffer_timeout: 2.0
+  
+  # Seconds within which double-press is detected
+  double_tap_window: 1.0
+```
+
+**How Agent Mode works:**
+1. Double-press the hotkey to switch to AGENT mode
+2. Speak your command - text is buffered
+3. After 2 seconds of silence, the command executes with your text
+4. Command output streams to stdout in real-time
+5. Double-press again to switch back to LISTEN mode
+6. If you switch modes or stop listening before the buffer timeout, the buffered text is discarded
 
 ### 🔧 Command-Line Options
 

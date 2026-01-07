@@ -29,9 +29,11 @@ except Exception:
 import argparse
 import logging
 import signal
+import subprocess
 import threading
 import time
 import platform
+from enum import Enum
 
 import numpy as np
 import sounddevice as sd
@@ -43,6 +45,12 @@ from lib.audio_recorder import AudioRecorder
 from lib.sound import SoundPlayer
 
 logger = logging.getLogger(__name__)
+
+
+class ListeningMode(Enum):
+    """Listening mode for voice keyboard"""
+    LISTEN = "LISTEN"  # Normal mode: transcribe to keyboard
+    AGENT = "AGENT"    # Agent mode: transcribe to shell command
 
 
 class VoiceKeyboard:
@@ -65,6 +73,19 @@ class VoiceKeyboard:
         
         self.is_running = False
         self.is_listening = False
+        
+        # Mode management
+        self.listening_mode = ListeningMode.LISTEN
+        
+        # Double-tap detection
+        self.last_hotkey_time = 0.0
+        self.double_tap_window = config.agent_double_tap_window
+        self.pending_single_tap = None  # Timer for delayed single-tap action
+        
+        # Agent mode state
+        self.agent_buffer = ""
+        self.agent_buffer_timer = None
+        self.agent_buffer_lock = threading.Lock()
         
         # Timestamp tracking for logging
         self.start_time = time.time()
@@ -147,7 +168,7 @@ class VoiceKeyboard:
             # Use pynput's GlobalHotKeys for reliable hotkey detection
             def on_activate():
                 logger.debug("Hotkey activated!")
-                self.toggle_listening()
+                self.handle_hotkey_press()
             
             hotkeys = {
                 pynput_hotkey: on_activate
@@ -201,8 +222,135 @@ class VoiceKeyboard:
         self.transcription_count += 1
         self.log(f"[Final]: {text}")
         
-        # Type final text with word mappings
-        self.typer.type_final(text)
+        # Handle based on current mode
+        if self.listening_mode == ListeningMode.AGENT:
+            self.handle_agent_transcription(text)
+        else:
+            # Normal LISTEN mode: type final text with word mappings
+            self.typer.type_final(text)
+    
+    def handle_hotkey_press(self):
+        """Handle hotkey press with double-tap detection"""
+        current_time = time.time()
+        time_since_last = current_time - self.last_hotkey_time
+        self.last_hotkey_time = current_time
+        
+        # Cancel any pending single-tap action
+        if self.pending_single_tap:
+            self.pending_single_tap.cancel()
+            self.pending_single_tap = None
+        
+        if time_since_last < self.double_tap_window:
+            # Double-tap detected - rotate modes
+            self.rotate_mode()
+        else:
+            # Schedule single-tap action after timeout
+            self.pending_single_tap = threading.Timer(
+                self.double_tap_window,
+                self.handle_single_tap
+            )
+            self.pending_single_tap.start()
+    
+    def handle_single_tap(self):
+        """Handle confirmed single-tap (after timeout)"""
+        self.pending_single_tap = None
+        self.toggle_listening()
+    
+    def rotate_mode(self):
+        """Rotate between LISTEN and AGENT modes"""
+        if self.listening_mode == ListeningMode.LISTEN:
+            self.listening_mode = ListeningMode.AGENT
+            self.log("🤖 Mode: AGENT (transcribe to shell command)")
+            # Clear any existing buffer
+            with self.agent_buffer_lock:
+                self.agent_buffer = ""
+                if self.agent_buffer_timer:
+                    self.agent_buffer_timer.cancel()
+                    self.agent_buffer_timer = None
+            # Play agent mode sound
+            if self.config.sounds_enabled:
+                self.sound.play(self.config.sound_on_agent_mode)
+        else:
+            # Switching from AGENT to LISTEN - discard any buffered text
+            with self.agent_buffer_lock:
+                if self.agent_buffer:
+                    self.log(f"🗑️  Discarding agent buffer: {self.agent_buffer[:50]}...")
+                self.agent_buffer = ""
+                if self.agent_buffer_timer:
+                    self.agent_buffer_timer.cancel()
+                    self.agent_buffer_timer = None
+            self.listening_mode = ListeningMode.LISTEN
+            self.log("⌨️  Mode: LISTEN (transcribe to keyboard)")
+            # Play normal mode sound
+            if self.config.sounds_enabled:
+                self.sound.play(self.config.sound_on_listening_start)
+        
+        # If listening is off, turn it on in the new mode
+        if not self.is_listening:
+            self.start_listening()
+    
+    def handle_agent_transcription(self, text: str):
+        """Handle transcription in AGENT mode - buffer and send to shell"""
+        with self.agent_buffer_lock:
+            # Append to buffer with space separator
+            if self.agent_buffer:
+                self.agent_buffer += " " + text
+            else:
+                self.agent_buffer = text
+            
+            self.log(f"🤖 [Agent Buffer]: {self.agent_buffer}")
+            
+            # Cancel existing timer
+            if self.agent_buffer_timer:
+                self.agent_buffer_timer.cancel()
+            
+            # Start new timer for buffer timeout
+            self.agent_buffer_timer = threading.Timer(
+                self.config.agent_buffer_timeout,
+                self.flush_agent_buffer
+            )
+            self.agent_buffer_timer.start()
+    
+    def flush_agent_buffer(self):
+        """Flush agent buffer and execute shell command"""
+        with self.agent_buffer_lock:
+            if not self.agent_buffer:
+                return
+            
+            prompt = self.agent_buffer
+            self.agent_buffer = ""
+            self.agent_buffer_timer = None
+        
+        # Build command from template
+        command_template = self.config.agent_command_template
+        command = command_template.replace("$PROMPT", prompt)
+        
+        self.log(f"🚀 Executing: {command}")
+        
+        # Execute shell command with output passthrough to stdout/stderr
+        try:
+            process = subprocess.Popen(
+                command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            
+            # Stream output to stdout in real-time
+            for line in process.stdout:
+                print(line, end='', flush=True)
+            
+            process.wait()
+            
+            if process.returncode != 0:
+                self.log(f"⚠️  Command exited with code {process.returncode}")
+            else:
+                self.log("✓ Command completed")
+                
+        except Exception as e:
+            self.log(f"❌ Command failed: {e}")
     
     def toggle_listening(self):
         """Toggle listening state"""
@@ -215,31 +363,46 @@ class VoiceKeyboard:
         """Start listening to microphone"""
         if self.is_listening:
             return
-        
         self.is_listening = True
         self.log("🎤 Listening started")
-        
-        # Resume audio recorder (unpause VAD)
-        self.recorder.resume()
-        
-        # Play sound
+        # Play sound based on current mode
         if self.config.sounds_enabled:
-            self.sound.play(self.config.sound_on_listening_start)
+            if self.listening_mode == ListeningMode.AGENT:
+                self.sound.play(self.config.sound_on_agent_mode)
+            else:
+                self.sound.play(self.config.sound_on_listening_start)
+        # Delay before actually resuming audio
+        delay = self.config.listening_state_delay_ms / 1000.0
+        threading.Timer(delay, self._resume_audio).start()
+
+    def _resume_audio(self):
+        if self.is_listening:
+            self.recorder.resume()
     
     def stop_listening(self):
         """Stop listening to microphone"""
         if not self.is_listening:
             return
-        
         self.is_listening = False
         self.log("⏸️  Listening stopped")
-        
-        # Pause audio recorder (stop VAD processing)
-        self.recorder.pause()
-        
         # Play sound
         if self.config.sounds_enabled:
             self.sound.play(self.config.sound_on_listening_stop)
+        # Delay before actually pausing audio
+        delay = self.config.listening_state_delay_ms / 1000.0
+        threading.Timer(delay, self._pause_audio).start()
+        # Discard any pending agent buffer
+        with self.agent_buffer_lock:
+            if self.agent_buffer:
+                self.log(f"🗑️  Discarding agent buffer: {self.agent_buffer[:50]}...")
+            self.agent_buffer = ""
+            if self.agent_buffer_timer:
+                self.agent_buffer_timer.cancel()
+                self.agent_buffer_timer = None
+
+    def _pause_audio(self):
+        if not self.is_listening:
+            self.recorder.pause()
     
     def start(self):
         """Start the voice keyboard"""
@@ -253,7 +416,11 @@ class VoiceKeyboard:
         # Start hotkey listener
         if self.hotkey_listener:
             self.hotkey_listener.start()
-            self.log(f"✓ Hotkey monitoring enabled ({self.config.toggle_listening_shortcut} = toggle listening)")
+            self.log(f"✓ Hotkey monitoring enabled ({self.config.toggle_listening_shortcut})")
+            self.log(f"  • Single press: toggle ON/OFF")
+            self.log(f"  • Double press: rotate mode (LISTEN ↔ AGENT)")
+        
+        self.log(f"⌨️  Mode: {self.listening_mode.value}")
         
         if self.verbose:
             self.log(f"🎙️  Ready! Press {self.config.toggle_listening_shortcut} to toggle listening... (Ctrl+C to quit)")
@@ -274,6 +441,12 @@ class VoiceKeyboard:
         """Stop the voice keyboard"""
         self.is_running = False
         self.is_listening = False
+        
+        # Cancel pending timers
+        if self.pending_single_tap:
+            self.pending_single_tap.cancel()
+        if self.agent_buffer_timer:
+            self.agent_buffer_timer.cancel()
         
         # Stop hotkey listener
         if self.hotkey_listener:

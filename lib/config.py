@@ -49,12 +49,17 @@ DEFAULT_CONFIG = {
     "agent": {
         "enabled": True,  # Enable agent mode (double-tap hotkey to activate)
         "command_template": 'subd -t ada "$PROMPT"',  # Shell command template ($PROMPT replaced with transcription)
-        "buffer_timeout": 2.0,  # Seconds of silence before sending buffered text to command
+        "buffer_timeout": 0.5,  # Seconds of silence before sending buffered text to command
         "double_tap_window": 0.5,  # Seconds within which a second tap counts as double-tap
     },
     "keyboard": {
         "typing_delay_ms": 20,  # Milliseconds delay between each keystroke (prevents skipping in some form input contexts)
         "key_hold_ms": 20,  # Milliseconds to hold key down before release (for SDL2/game input compatibility)
+        "discard_phrases": [  # Phrases to discard (misheard sounds like coughs/sneezes)
+            "thank you",
+            "thanks",
+            "you",
+        ],
     },
     "word_mappings": {
         "new line": "\n",
@@ -329,6 +334,12 @@ class Config:
     def key_hold_ms(self) -> int:
         """Get key hold duration in milliseconds (time between press and release)"""
         return self.get('keyboard.key_hold_ms', 20)
+    
+    @property
+    def discard_phrases(self) -> set:
+        """Get set of phrases to discard (misheard sounds like coughs/sneezes)"""
+        phrases = self.get('keyboard.discard_phrases', ['thank you', 'thanks', 'you'])
+        return set(p.lower().strip() for p in phrases) if phrases else set()
     
     @property
     def sounds_enabled(self) -> bool:

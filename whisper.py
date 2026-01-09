@@ -99,12 +99,12 @@ class VoiceKeyboard:
             base_path=config.config_path.parent
         )
         
-        # Initialize keyboard typer
-        # Initialize keyboard typer
+        # Initialize keyboard typer with output queue and discard filter
         self.typer = KeyboardTyper(
             word_mappings=config.word_mappings,
             typing_delay_ms=config.typing_delay_ms,
-            key_hold_ms=config.key_hold_ms
+            key_hold_ms=config.key_hold_ms,
+            discard_phrases=config.discard_phrases
         )
         
         # Initialize audio recorder with callbacks
@@ -217,6 +217,11 @@ class VoiceKeyboard:
         # Don't process if listening is stopped (transcription was cancelled)
         if not self.is_listening:
             self.log(f"[Cancelled]: {text}")
+            return
+        
+        # Check if text should be discarded (misheard sounds like coughs/sneezes)
+        if self.typer.should_discard(text):
+            self.log(f"[Discarded]: {text}")
             return
         
         self.transcription_count += 1

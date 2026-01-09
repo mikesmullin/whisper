@@ -99,7 +99,7 @@ agent:
   
   # Seconds of silence before buffered text is sent to the command
   # Text is accumulated until this timeout, then the command is executed
-  buffer_timeout: 2.0
+  buffer_timeout: 0.5
   
   # Seconds within which a second hotkey press counts as a double-tap
   # Double-tap rotates between LISTEN and AGENT modes
@@ -110,6 +110,16 @@ keyboard:
   # Prevents skipping keys in some terminal inputs
   # Increase if keys are being dropped
   typing_delay_ms: 10
+  
+  # Key hold duration in milliseconds (time between press and release)
+  # For SDL2/game input compatibility
+  key_hold_ms: 20
+  
+  # Phrases to discard (commonly misheard sounds like coughs/sneezes)
+  # These are normalized (lowercase, stripped) before comparison
+  # Add any phrases that Whisper often misinterprets from non-speech sounds
+  discard_phrases:
+  - "thank you"
 
 word_mappings:
   # Map spoken words to keyboard output

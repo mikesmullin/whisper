@@ -3,18 +3,34 @@ Keyboard output for typing transcriptions
 """
 
 import logging
+import queue
 import re
+import threading
 import time
-from typing import Dict, Optional
+from typing import Callable, Dict, List, Optional, Set
 from pynput.keyboard import Controller, Key
 
 logger = logging.getLogger(__name__)
 
 
+# Default phrases to discard (commonly misheard sounds like coughs/sneezes)
+DEFAULT_DISCARD_PHRASES: Set[str] = {
+    "thank you",
+    "thanks",
+    "you",
+}
+
+
 class KeyboardTyper:
-    """Types transcribed text using keyboard simulation"""
+    """Types transcribed text using keyboard simulation with queued output"""
     
-    def __init__(self, word_mappings: Optional[Dict[str, str]] = None, typing_delay_ms: int = 10, key_hold_ms: int = 20):
+    def __init__(
+        self,
+        word_mappings: Optional[Dict[str, str]] = None,
+        typing_delay_ms: int = 10,
+        key_hold_ms: int = 20,
+        discard_phrases: Optional[Set[str]] = None
+    ):
         """
         Initialize keyboard typer
         
@@ -22,6 +38,7 @@ class KeyboardTyper:
             word_mappings: Dictionary mapping spoken words to keyboard inputs
             typing_delay_ms: Delay in milliseconds between each keystroke
             key_hold_ms: Delay in milliseconds between key press and release (for SDL2 compatibility)
+            discard_phrases: Set of phrases to discard (case-insensitive). If None, uses defaults.
         """
         self.controller = Controller()
         self.word_mappings = word_mappings or {}
@@ -34,13 +51,116 @@ class KeyboardTyper:
         self.preview_length = 0  # Number of characters in current preview
         self.last_preview_text = ""
         
+        # Discard filter: phrases that should not be typed (normalized to lowercase)
+        if discard_phrases is None:
+            self.discard_phrases = DEFAULT_DISCARD_PHRASES
+        else:
+            self.discard_phrases = {p.lower().strip() for p in discard_phrases}
+        
+        # Output queue for serializing keyboard output (prevents interleaving)
+        self._output_queue: queue.Queue = queue.Queue()
+        self._queue_worker_thread: Optional[threading.Thread] = None
+        self._queue_running = False
+        self._start_queue_worker()
+        
         logger.info(f"Keyboard typer initialized with {len(self.word_mappings)} word mappings")
+        logger.info(f"Discard filter has {len(self.discard_phrases)} phrases: {self.discard_phrases}")
         for word, replacement in self.word_mappings.items():
             logger.debug(f"  Mapping: {repr(word)} -> {repr(replacement)}")
     
+    def _start_queue_worker(self):
+        """Start the background worker thread that processes the output queue"""
+        if self._queue_running:
+            return
+        
+        self._queue_running = True
+        self._queue_worker_thread = threading.Thread(
+            target=self._queue_worker_loop,
+            daemon=True,
+            name="KeyboardOutputQueue"
+        )
+        self._queue_worker_thread.start()
+        logger.debug("Keyboard output queue worker started")
+    
+    def _queue_worker_loop(self):
+        """Background worker that processes queued keyboard output tasks"""
+        while self._queue_running:
+            try:
+                # Block with timeout to allow graceful shutdown
+                task = self._output_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            
+            try:
+                task_type = task.get("type")
+                
+                if task_type == "type_text":
+                    self._do_type_text(task["text"], task["delay"])
+                elif task_type == "type_final":
+                    self._do_type_final(task["text"], task["delay"])
+                elif task_type == "type_preview":
+                    self._do_type_realtime_preview(task["text"])
+                elif task_type == "backspace":
+                    self._do_press_backspace(task["count"])
+                else:
+                    logger.warning(f"Unknown queue task type: {task_type}")
+            except Exception as e:
+                logger.error(f"Error processing keyboard queue task: {e}")
+            finally:
+                self._output_queue.task_done()
+    
+    def stop_queue_worker(self):
+        """Stop the queue worker thread (for cleanup)"""
+        self._queue_running = False
+        if self._queue_worker_thread:
+            self._queue_worker_thread.join(timeout=2.0)
+            self._queue_worker_thread = None
+        logger.debug("Keyboard output queue worker stopped")
+    
+    def should_discard(self, text: str) -> bool:
+        """
+        Check if the text should be discarded based on the discard filter.
+        
+        Args:
+            text: Text to check
+            
+        Returns:
+            True if the text matches a discard phrase and should be dropped
+        """
+        if not text:
+            return True
+        
+        # Normalize: lowercase, strip whitespace and punctuation
+        normalized = re.sub(r'^[\s\.,!?;:]+|[\s\.,!?;:]+$', '', text.lower().strip())
+        
+        # Check if normalized text matches any discard phrase
+        if normalized in self.discard_phrases:
+            logger.info(f"Discarding text that matches filter: {repr(text)} -> {repr(normalized)}")
+            return True
+        
+        return False
+
     def type_text(self, text: str, delay: float = 0.01):
         """
-        Type text with word mapping support
+        Queue text for typing with word mapping support.
+        Text is added to a queue and typed in order (prevents interleaving).
+        
+        Args:
+            text: Text to type
+            delay: Delay between characters in seconds
+        """
+        if not text:
+            return
+        
+        self._output_queue.put({
+            "type": "type_text",
+            "text": text,
+            "delay": delay
+        })
+    
+    def _do_type_text(self, text: str, delay: float = 0.01):
+        """
+        Actually type text with word mapping support (called by queue worker).
         
         Args:
             text: Text to type
@@ -243,7 +363,22 @@ class KeyboardTyper:
     
     def press_backspace(self, count: int = 1):
         """
-        Press the Backspace key
+        Queue backspace key presses.
+        
+        Args:
+            count: Number of times to press backspace
+        """
+        if count <= 0:
+            return
+        
+        self._output_queue.put({
+            "type": "backspace",
+            "count": count
+        })
+    
+    def _do_press_backspace(self, count: int = 1):
+        """
+        Actually press the Backspace key (called by queue worker).
         
         Args:
             count: Number of times to press backspace
@@ -259,7 +394,7 @@ class KeyboardTyper:
     
     def type_realtime_preview(self, text: str):
         """
-        Type realtime preview text (unstable, will be replaced by final)
+        Queue realtime preview text for typing (unstable, will be replaced by final).
         
         This is for showing instant feedback during speech. The text is typed
         without word mappings applied, and will be cleared when final transcription
@@ -271,9 +406,24 @@ class KeyboardTyper:
         if not text:
             return
         
+        self._output_queue.put({
+            "type": "type_preview",
+            "text": text
+        })
+    
+    def _do_type_realtime_preview(self, text: str):
+        """
+        Actually type realtime preview text (called by queue worker).
+        
+        Args:
+            text: Preview text to type
+        """
+        if not text:
+            return
+        
         # Clear previous preview if it exists
         if self.preview_length > 0:
-            self.press_backspace(self.preview_length)
+            self._do_press_backspace(self.preview_length)
             self.preview_length = 0
         
         # Type new preview (no word mappings, just raw text)
@@ -291,7 +441,7 @@ class KeyboardTyper:
     
     def type_final(self, text: str, delay: float = 0.01):
         """
-        Type final transcription with word mappings applied
+        Queue final transcription for typing with word mappings applied.
         
         This replaces any existing preview and applies word mappings.
         A trailing space is appended to prevent word conjoining when dictation resumes.
@@ -300,14 +450,31 @@ class KeyboardTyper:
             text: Final transcription text
             delay: Delay between characters in seconds
         """
+        if not text:
+            return
+        
+        self._output_queue.put({
+            "type": "type_final",
+            "text": text,
+            "delay": delay
+        })
+    
+    def _do_type_final(self, text: str, delay: float = 0.01):
+        """
+        Actually type final transcription with word mappings applied (called by queue worker).
+        
+        Args:
+            text: Final transcription text
+            delay: Delay between characters in seconds
+        """
         # Clear preview if exists
         if self.preview_length > 0:
-            self.press_backspace(self.preview_length)
+            self._do_press_backspace(self.preview_length)
             self.preview_length = 0
             self.last_preview_text = ""
         
-        # Type final text with word mappings
-        self.type_text(text, delay)
+        # Type final text with word mappings (directly, not via queue since we're already in queue worker)
+        self._do_type_text(text, delay)
         
         # Append a space after final transcription to prevent word conjoining
         # when dictation resumes after a pause

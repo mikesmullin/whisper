@@ -28,6 +28,7 @@ except Exception:
 
 import argparse
 import logging
+import re
 import signal
 import subprocess
 import threading
@@ -322,13 +323,26 @@ class VoiceKeyboard:
             if not self.agent_buffer:
                 return
             
-            prompt = self.agent_buffer
+            full_buffer = self.agent_buffer
             self.agent_buffer = ""
             self.agent_buffer_timer = None
         
+        # Split buffer: first word becomes $AGENT, rest becomes $PROMPT
+        parts = full_buffer.strip().split(None, 1)  # Split on first whitespace
+        if len(parts) >= 2:
+            agent = parts[0]
+            prompt = parts[1]
+        else:
+            # Only one word - use it as both agent and prompt
+            agent = parts[0] if parts else ""
+            prompt = full_buffer
+        
+        # Normalize agent: lowercase and strip punctuation
+        agent = re.sub(r'[^\w\s-]', '', agent).lower().strip()
+        
         # Build command from template
         command_template = self.config.agent_command_template
-        command = command_template.replace("$PROMPT", prompt)
+        command = command_template.replace("$AGENT", agent).replace("$PROMPT", prompt)
         
         self.log(f"🚀 Executing: {command}")
         

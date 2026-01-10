@@ -94,8 +94,12 @@ agent:
   enabled: true
   
   # Shell command template to execute with transcribed text
-  # $PROMPT will be replaced with the transcribed text
-  command_template: 'subd -t ada "$PROMPT"'
+  # Variables:
+  #   $AGENT - The first word of the spoken text (agent/target selector)
+  #   $PROMPT - The rest of the spoken text (the actual command/query)
+  # Example: saying "home turn desk light blue" with template below becomes:
+  #   subd -t "home" "turn desk light blue"
+  command_template: 'subd -t "$AGENT" "$PROMPT"'
   
   # Seconds of silence before buffered text is sent to the command
   # Text is accumulated until this timeout, then the command is executed

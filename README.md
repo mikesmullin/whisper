@@ -113,17 +113,20 @@ Whisper supports two listening modes:
 
 #### AGENT Mode
 - Transcribes speech to a shell command instead of keyboard
-- Text is buffered until 2 seconds of silence
-- Then executes a configurable shell command with the transcribed text
+- Text is buffered until silence timeout (default 0.5 seconds)
+- First word becomes `$AGENT` (normalized: lowercase, punctuation stripped)
+- Remaining words become `$PROMPT`
+- Then executes a configurable shell command with both variables
 - Shell output is passed through to stdout for visibility
-- Perfect for voice-controlled AI assistants, automation, etc.
+- Perfect for voice-controlled AI assistants with multiple targets/agents
 
-**Example use case**: Configure `subd -t ada "$PROMPT"` to send voice commands to an AI agent:
+**Example use case**: Say "ada what is the weather" to route to different AI agents:
 ```yaml
 agent:
-  command_template: 'subd -t ada "$PROMPT"'
-  buffer_timeout: 2.0
+  command_template: 'subd -t "$AGENT" "$PROMPT"'
+  buffer_timeout: 0.5
 ```
+This executes: `subd -t "ada" "what is the weather"`
 
 ### 🎙️ How It Works
 
@@ -208,23 +211,27 @@ agent:
   # Enable/disable agent mode (double-tap to activate)
   enabled: true
   
-  # Shell command template - $PROMPT is replaced with transcribed text
-  command_template: 'subd -t ada "$PROMPT"'
+  # Shell command template with variables:
+  #   $AGENT - First word (lowercase, punctuation stripped)
+  #   $PROMPT - Remaining words
+  # Example: "Ada, tell me a joke" → $AGENT="ada", $PROMPT="tell me a joke"
+  command_template: 'subd -t "$AGENT" "$PROMPT"'
   
   # Seconds of silence before sending buffered text to command
-  buffer_timeout: 2.0
+  buffer_timeout: 0.5
   
   # Seconds within which double-press is detected
-  double_tap_window: 1.0
+  double_tap_window: 0.5
 ```
 
 **How Agent Mode works:**
 1. Double-press the hotkey to switch to AGENT mode
-2. Speak your command - text is buffered
-3. After 2 seconds of silence, the command executes with your text
-4. Command output streams to stdout in real-time
-5. Double-press again to switch back to LISTEN mode
-6. If you switch modes or stop listening before the buffer timeout, the buffered text is discarded
+2. Speak your command - text is buffered (e.g., "Home, turn on the lights")
+3. After silence timeout, the first word becomes `$AGENT` ("home") and the rest becomes `$PROMPT` ("turn on the lights")
+4. Command executes with both variables substituted
+5. Command output streams to stdout in real-time
+6. Double-press again to switch back to LISTEN mode
+7. If you switch modes or stop listening before the buffer timeout, the buffered text is discarded
 
 ### 🔧 Command-Line Options
 

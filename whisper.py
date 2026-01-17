@@ -295,6 +295,13 @@ class VoiceKeyboard:
         if not self.is_listening:
             self.start_listening()
     
+    @staticmethod
+    def _normalize_for_matching(text: str) -> str:
+        """Normalize text for exact-match comparison: trim, lowercase, alphanumeric only"""
+        # Remove all non-alphanumeric characters except spaces, then normalize spaces
+        text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+        return ' '.join(text.lower().split())
+    
     def handle_agent_transcription(self, text: str):
         """Handle transcription in AGENT mode - buffer and send to shell"""
         with self.agent_buffer_lock:
@@ -327,22 +334,32 @@ class VoiceKeyboard:
             self.agent_buffer = ""
             self.agent_buffer_timer = None
         
-        # Split buffer: first word becomes $AGENT, rest becomes $PROMPT
-        parts = full_buffer.strip().split(None, 1)  # Split on first whitespace
-        if len(parts) >= 2:
-            agent = parts[0]
-            prompt = parts[1]
+        # Normalize full buffer for exact-match lookup
+        normalized_buffer = self._normalize_for_matching(full_buffer)
+        
+        # Check for exact-match command first
+        exact_match_commands = self.config.agent_commands
+        if normalized_buffer in exact_match_commands:
+            command = exact_match_commands[normalized_buffer]
+            self.log(f"🎯 Exact match: '{normalized_buffer}' -> {command}")
         else:
-            # Only one word - use it as both agent and prompt
-            agent = parts[0] if parts else ""
-            prompt = full_buffer
-        
-        # Normalize agent: lowercase and strip punctuation
-        agent = re.sub(r'[^\w\s-]', '', agent).lower().strip()
-        
-        # Build command from template
-        command_template = self.config.agent_command_template
-        command = command_template.replace("$AGENT", agent).replace("$PROMPT", prompt)
+            # No exact match - use default command template
+            # Split buffer: first word becomes $AGENT, rest becomes $PROMPT
+            parts = full_buffer.strip().split(None, 1)  # Split on first whitespace
+            if len(parts) >= 2:
+                agent = parts[0]
+                prompt = parts[1]
+            else:
+                # Only one word - use it as both agent and prompt
+                agent = parts[0] if parts else ""
+                prompt = full_buffer
+            
+            # Normalize agent: trim, lowercase, alphanumeric only
+            agent = self._normalize_for_matching(agent)
+            
+            # Build command from default template
+            command_template = self.config.agent_default_command
+            command = command_template.replace("$AGENT", agent).replace("$PROMPT", prompt)
         
         self.log(f"🚀 Executing: {command}")
         

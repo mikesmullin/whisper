@@ -10,7 +10,8 @@ A cross-platform voice keyboard that transcribes your speech into typed text in 
 - **🎯 Accurate Final Text**: Large model refines transcription after you finish speaking
 - **🔇 Dual-VAD System**: WebRTC + Silero for fast and accurate speech detection
 - **⌨️ Configurable Commands**: Map spoken words to keyboard shortcuts
-- **� Audio Feedback**: Sound effects for listening state changes
+- **🤖 Agent Mode**: Voice-controlled shell commands with exact-match phrases and AI routing
+- **🔊 Audio Feedback**: Sound effects for listening state changes
 - **📝 Word Mappings**: Convert spoken commands to actions (e.g., "new line" → newline)
 - **📊 Performance Monitoring**: Timestamped logging to measure latency
 
@@ -114,19 +115,22 @@ Whisper supports two listening modes:
 #### AGENT Mode
 - Transcribes speech to a shell command instead of keyboard
 - Text is buffered until silence timeout (default 0.5 seconds)
-- First word becomes `$AGENT` (normalized: lowercase, punctuation stripped)
-- Remaining words become `$PROMPT`
-- Then executes a configurable shell command with both variables
+- **Exact-match commands**: If speech matches a configured phrase exactly, executes that command directly
+- **Default command**: If no exact match, uses template with `$AGENT` (first word) and `$PROMPT` (rest)
+- All phrases are normalized before matching (trimmed, lowercased, alphanumeric only)
 - Shell output is passed through to stdout for visibility
-- Perfect for voice-controlled AI assistants with multiple targets/agents
+- Perfect for voice-controlled shortcuts, home automation, and AI assistants
 
-**Example use case**: Say "ada what is the weather" to route to different AI agents:
+**Example use case**: Configure exact commands for common tasks:
 ```yaml
 agent:
-  command_template: 'subd -t "$AGENT" "$PROMPT"'
-  buffer_timeout: 0.5
+  commands:
+    "work password": "~/wlogin.sh"
+    "home lights blue": "govee rgb 0 0 255"
+  default_command: 'subd -t "$AGENT" "$PROMPT"'
 ```
-This executes: `subd -t "ada" "what is the weather"`
+- Say "work password" → executes `~/wlogin.sh`
+- Say "ada what is the weather" → executes `subd -t "ada" "what is the weather"`
 
 ### 🎙️ How It Works
 
@@ -211,11 +215,16 @@ agent:
   # Enable/disable agent mode (double-tap to activate)
   enabled: true
   
-  # Shell command template with variables:
-  #   $AGENT - First word (lowercase, punctuation stripped)
-  #   $PROMPT - Remaining words
-  # Example: "Ada, tell me a joke" → $AGENT="ada", $PROMPT="tell me a joke"
-  command_template: 'subd -t "$AGENT" "$PROMPT"'
+  # Exact-match commands: spoken phrase -> shell command
+  # Phrases are normalized (trimmed, lowercased, alphanumeric only) before matching
+  commands:
+    "home lights blue": "govee rgb 0 0 255"
+  
+  # Default command template (used when no exact match found):
+  #   $AGENT - First word (normalized: trim, lowercase, alphanumeric)
+  #   $PROMPT - Full transcribed text
+  # Example: "Ada, tell me a joke" → $AGENT="ada", $PROMPT="Ada, tell me a joke"
+  default_command: 'subd -t "$AGENT" "$PROMPT"'
   
   # Seconds of silence before sending buffered text to command
   buffer_timeout: 0.5
@@ -226,9 +235,11 @@ agent:
 
 **How Agent Mode works:**
 1. Double-press the hotkey to switch to AGENT mode
-2. Speak your command - text is buffered (e.g., "Home, turn on the lights")
-3. After silence timeout, the first word becomes `$AGENT` ("home") and the rest becomes `$PROMPT` ("turn on the lights")
-4. Command executes with both variables substituted
+2. Speak your command - text is buffered (e.g., "work password" or "Home, turn on the lights")
+3. After silence timeout:
+   - If exact match found in `commands`, execute that command directly
+   - Otherwise, first word becomes `$AGENT` and full text becomes `$PROMPT`
+4. Command executes with variables substituted
 5. Command output streams to stdout in real-time
 6. Double-press again to switch back to LISTEN mode
 7. If you switch modes or stop listening before the buffer timeout, the buffered text is discarded

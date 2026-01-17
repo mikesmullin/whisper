@@ -48,7 +48,8 @@ DEFAULT_CONFIG = {
     },
     "agent": {
         "enabled": True,  # Enable agent mode (double-tap hotkey to activate)
-        "command_template": 'subd -t ada "$PROMPT"',  # Shell command template ($PROMPT replaced with transcription)
+        "commands": {},  # Exact-match commands: normalized phrase -> shell command
+        "default_command": 'subd -t ada "$PROMPT"',  # Fallback command template ($AGENT, $PROMPT)
         "buffer_timeout": 0.5,  # Seconds of silence before sending buffered text to command
         "double_tap_window": 0.5,  # Seconds within which a second tap counts as double-tap
     },
@@ -363,9 +364,30 @@ class Config:
         return self.get('agent.enabled', True)
 
     @property
-    def agent_command_template(self) -> str:
-        """Get agent mode shell command template"""
-        return self.get('agent.command_template', 'subd -t ada "$PROMPT"')
+    def agent_default_command(self) -> str:
+        """Get agent mode default shell command template"""
+        # Support both new name and legacy name for backwards compatibility
+        cmd = self.get('agent.default_command')
+        if cmd is None:
+            cmd = self.get('agent.command_template', 'subd -t ada "$PROMPT"')
+        return cmd
+
+    @property
+    def agent_commands(self) -> dict:
+        """Get agent mode exact-match commands mapping"""
+        commands = self.get('agent.commands', {})
+        if commands is None:
+            return {}
+        # Normalize keys for matching (trim, lowercase, alphanumeric only)
+        return {self._normalize_for_matching(k): v for k, v in commands.items()}
+    
+    @staticmethod
+    def _normalize_for_matching(text: str) -> str:
+        """Normalize text for exact-match comparison: trim, lowercase, alphanumeric only"""
+        import re
+        # Remove all non-alphanumeric characters except spaces, then normalize spaces
+        text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+        return ' '.join(text.lower().split())
 
     @property
     def agent_buffer_timeout(self) -> float:

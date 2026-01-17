@@ -93,13 +93,17 @@ agent:
   # Enable/disable agent mode functionality
   enabled: true
   
-  # Shell command template to execute with transcribed text
-  # Variables:
-  #   $AGENT - The first word of the spoken text (agent/target selector)
-  #   $PROMPT - The rest of the spoken text (the actual command/query)
-  # Example: saying "home turn desk light blue" with template below becomes:
-  #   subd -t "home" "turn desk light blue"
-  command_template: 'subd -t "$AGENT" "$PROMPT"'
+  # Default shell command template when no exact match found
+  # $PROMPT = full transcribed text, $AGENT = first word (normalized: trim, lowercase, alphanumeric)
+  #default_command: 'subd -v -l 1 -t "mini-$AGENT" "$PROMPT"'
+  default_command: 'subd -v -l 1 -t "$AGENT" "$PROMPT"'
+
+  # Exact-match commands: spoken phrase -> shell command
+  # Phrases are normalized (trimmed, lowercased, alphanumeric only) before matching
+  # If no exact match is found, falls back to default_command
+  commands:
+    # Example: saying "home lights blue" executes `subd -t home turn all lights blue`
+    # "home lights blue": "subd -t home turn all lights blue"
   
   # Seconds of silence before buffered text is sent to the command
   # Text is accumulated until this timeout, then the command is executed

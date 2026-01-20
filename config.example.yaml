@@ -1,0 +1,57 @@
+# whisper v2 configuration
+
+# Path to perception-voice server socket (relative to this file, or absolute)
+perception_voice:
+  socket_path: "tmp/perception-voice/perception.sock"
+
+# Hotkey to toggle listening on/off
+shortcuts:
+  toggle_listening: "ctrl+shift+space"
+
+# Keyboard typing configuration
+keyboard:
+  # Milliseconds delay between each keystroke (prevents skipping in some input contexts)
+  typing_delay_ms: 20
+  # Milliseconds to hold key down before release (for SDL2/game input compatibility)
+  key_hold_ms: 20
+  # Phrases to discard (misheard sounds like coughs/sneezes)
+  discard_phrases:
+    - "thank you"
+
+# Word mappings: spoken words -> keyboard output
+# Can be text replacements or hotkeys (format: "ctrl+z")
+word_mappings:
+  "new line": "\n"
+  "insert bullet": "- "
+  "completion": "\t"
+  "end of sentence": "."
+  "dot": "."
+  "comma": ","
+  "question mark": "?"
+  "exclamation point": "!"
+  "colon": ":"
+  "semicolon": ";"
+  # Hotkeys (will be executed as keyboard shortcuts)
+  "now undo": "ctrl+z"
+  "now redo": "ctrl+y"
+  "now copy": "ctrl+c"
+  "now paste": "ctrl+v"
+  "now cut": "ctrl+x"
+  "now save": "ctrl+s"
+
+# Sound effects
+sounds:
+  enabled: true
+  on_listening_start: "sfx/squelch-on.wav"
+  on_listening_stop: "sfx/click-off.wav"
+  # Delay (ms) after hotkey press before resuming/pausing audio polling
+  listening_state_delay_ms: 200
+
+# Polling interval for checking perception-voice server (seconds)
+polling:
+  interval_ms: 100
+
+# Logging
+logging:
+  timestamps: true
+  verbose: false

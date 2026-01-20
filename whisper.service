@@ -1,0 +1,27 @@
+# whisper systemd user service
+# 
+# Installation:
+#   1. Copy this file to ~/.config/systemd/user/whisper.service
+#   2. Edit the ExecStart path to match your installation
+#   3. Enable and start:
+#      systemctl --user daemon-reload
+#      systemctl --user enable whisper
+#      systemctl --user start whisper
+#
+# View logs:
+#   journalctl --user -u whisper -f
+
+[Unit]
+Description=Whisper - Voice Keyboard
+Documentation=https://github.com/mikesmullin/whisper
+After=perception-voice.service graphical-session.target
+Wants=perception-voice.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/whisper
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

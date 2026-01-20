@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "whisper"
+version = "2.0.0"
+description = "Voice keyboard - speech-to-text typing via perception-voice"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "whisper", email = "whisper@example.com"}
+]
+dependencies = [
+    "pynput>=1.7.6",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+whisper = "whisper.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["whisper*"]

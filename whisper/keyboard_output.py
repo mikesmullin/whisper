@@ -287,23 +287,30 @@ class KeyboardTyper:
     
     def _type_char(self, char: str):
         """
-        Type a single character using explicit press/release
+        Type a single character.
+        
+        Uses controller.type() for shifted characters (like ? ! @ etc.) to ensure
+        the shift key is properly held. Falls back to press/release for simple chars.
         
         Args:
             char: Character to type
         """
+        # Characters that require Shift on a US keyboard layout
+        shifted_chars = set('~!@#$%^&*()_+{}|:"<>?ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        
         try:
-            if char == ' ':
+            if char in shifted_chars:
+                # Use type() for shifted characters - it handles Shift atomically
+                self.controller.type(char)
+            elif char == ' ':
                 self.controller.press(Key.space)
-            else:
-                self.controller.press(char)
-            
-            if self.key_hold_s > 0:
-                time.sleep(self.key_hold_s)
-            
-            if char == ' ':
+                if self.key_hold_s > 0:
+                    time.sleep(self.key_hold_s)
                 self.controller.release(Key.space)
             else:
+                self.controller.press(char)
+                if self.key_hold_s > 0:
+                    time.sleep(self.key_hold_s)
                 self.controller.release(char)
             
             if self.typing_delay_s > 0:

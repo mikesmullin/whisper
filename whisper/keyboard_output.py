@@ -285,25 +285,57 @@ class KeyboardTyper:
         except Exception as e:
             logger.error(f"Error executing hotkey {hotkey_str}: {e}")
     
+    # Mapping of shifted characters to their base keys (US keyboard layout)
+    # When typing these characters, we need to explicitly press Shift + base_key
+    # so that SDL2-based applications (like kvm-client) see the proper scancode + modifier
+    SHIFTED_CHAR_MAP = {
+        '~': '`', '!': '1', '@': '2', '#': '3', '$': '4', '%': '5',
+        '^': '6', '&': '7', '*': '8', '(': '9', ')': '0', '_': '-',
+        '+': '=', '{': '[', '}': ']', '|': '\\', ':': ';', '"': "'",
+        '<': ',', '>': '.', '?': '/',
+    }
+    
     def _type_char(self, char: str):
         """
-        Type a single character using explicit press/release
+        Type a single character using explicit press/release.
+        
+        For shifted characters (like ? ! @ etc.), explicitly presses Shift + base_key
+        so that SDL2-based applications see the proper scancode with modifier.
         
         Args:
             char: Character to type
         """
         try:
-            if char == ' ':
+            # Check if this is a shifted character that needs explicit Shift + base_key
+            if char in self.SHIFTED_CHAR_MAP:
+                base_key = self.SHIFTED_CHAR_MAP[char]
+                self.controller.press(Key.shift)
+                time.sleep(0.005)  # Small delay to ensure shift is registered
+                self.controller.press(base_key)
+                if self.key_hold_s > 0:
+                    time.sleep(self.key_hold_s)
+                self.controller.release(base_key)
+                time.sleep(0.005)
+                self.controller.release(Key.shift)
+            elif char.isupper() and char.isalpha():
+                # Uppercase letters also need explicit Shift
+                self.controller.press(Key.shift)
+                time.sleep(0.005)
+                self.controller.press(char.lower())
+                if self.key_hold_s > 0:
+                    time.sleep(self.key_hold_s)
+                self.controller.release(char.lower())
+                time.sleep(0.005)
+                self.controller.release(Key.shift)
+            elif char == ' ':
                 self.controller.press(Key.space)
-            else:
-                self.controller.press(char)
-            
-            if self.key_hold_s > 0:
-                time.sleep(self.key_hold_s)
-            
-            if char == ' ':
+                if self.key_hold_s > 0:
+                    time.sleep(self.key_hold_s)
                 self.controller.release(Key.space)
             else:
+                self.controller.press(char)
+                if self.key_hold_s > 0:
+                    time.sleep(self.key_hold_s)
                 self.controller.release(char)
             
             if self.typing_delay_s > 0:

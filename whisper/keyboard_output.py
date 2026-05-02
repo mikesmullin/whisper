@@ -155,6 +155,7 @@ class KeyboardTyper:
         """
         # Process text and apply word mappings
         processed_items = self._apply_word_mappings(text)
+        should_append_space = self._should_append_trailing_space(processed_items)
         
         logger.debug(f"Processed items: {repr(processed_items)}")
         
@@ -168,13 +169,27 @@ class KeyboardTyper:
                         if delay > 0:
                             time.sleep(delay)
             
-            # Append a space after final transcription
-            self._type_char(' ')
+            if should_append_space:
+                # Append a space after final transcription unless output ends with a newline
+                self._type_char(' ')
             
             logger.info(f"Typed: {repr(text)}")
         
         except Exception as e:
             logger.error(f"Error typing text: {e}")
+
+    def _should_append_trailing_space(self, processed_items) -> bool:
+        """Return whether final output should get the default trailing space."""
+        for item in reversed(processed_items):
+            if isinstance(item, dict):
+                continue
+
+            if not item:
+                continue
+
+            return not item.endswith(('\n', '\r'))
+
+        return True
     
     def _apply_word_mappings(self, text: str):
         """
@@ -294,6 +309,12 @@ class KeyboardTyper:
         '+': '=', '{': '[', '}': ']', '|': '\\', ':': ';', '"': "'",
         '<': ',', '>': '.', '?': '/',
     }
+
+    SPECIAL_CHAR_KEY_MAP = {
+        '\n': Key.enter,
+        '\r': Key.enter,
+        '\t': Key.tab,
+    }
     
     def _type_char(self, char: str):
         """
@@ -307,7 +328,13 @@ class KeyboardTyper:
         """
         try:
             # Check if this is a shifted character that needs explicit Shift + base_key
-            if char in self.SHIFTED_CHAR_MAP:
+            if char in self.SPECIAL_CHAR_KEY_MAP:
+                key = self.SPECIAL_CHAR_KEY_MAP[char]
+                self.controller.press(key)
+                if self.key_hold_s > 0:
+                    time.sleep(self.key_hold_s)
+                self.controller.release(key)
+            elif char in self.SHIFTED_CHAR_MAP:
                 base_key = self.SHIFTED_CHAR_MAP[char]
                 self.controller.press(Key.shift)
                 time.sleep(0.005)  # Small delay to ensure shift is registered

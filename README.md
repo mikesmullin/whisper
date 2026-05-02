@@ -78,6 +78,10 @@ perception_voice:
 shortcuts:
   toggle_listening: "ctrl+shift+space"
 
+# Exact-match command mappings
+command_mappings:
+  "work password": "~/wlogin.sh"
+
 # Word mappings
 word_mappings:
   "new line": "\n"

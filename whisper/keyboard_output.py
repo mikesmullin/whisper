@@ -47,6 +47,10 @@ class KeyboardTyper:
         self.typing_delay_s = typing_delay_ms / 1000.0
         self.key_hold_ms = key_hold_ms
         self.key_hold_s = key_hold_ms / 1000.0
+        self._normalized_word_mappings = {
+            self._normalize_mapping_phrase(phrase): replacement
+            for phrase, replacement in self.word_mappings.items()
+        }
         
         # Discard filter: phrases that should not be typed
         if discard_phrases is None:
@@ -58,6 +62,7 @@ class KeyboardTyper:
         self._output_queue: queue.Queue = queue.Queue()
         self._queue_worker_thread: Optional[threading.Thread] = None
         self._queue_running = False
+        self._cancel_output_event = threading.Event()
         self._start_queue_worker()
         
         logger.info(f"Keyboard typer initialized with {len(self.word_mappings)} mappings")
@@ -89,7 +94,11 @@ class KeyboardTyper:
                 task_type = task.get("type")
                 
                 if task_type == "type_final":
-                    self._do_type_final(task["text"], task["delay"])
+                    self._do_type_final(
+                        task["text"],
+                        task["delay"],
+                        task.get("apply_word_mappings", True)
+                    )
                 else:
                     logger.warning(f"Unknown queue task type: {task_type}")
             
@@ -100,11 +109,25 @@ class KeyboardTyper:
     
     def stop_queue_worker(self):
         """Stop the queue worker thread (for cleanup)"""
+        self.cancel_pending_output()
         self._queue_running = False
         if self._queue_worker_thread:
             self._queue_worker_thread.join(timeout=2.0)
             self._queue_worker_thread = None
         logger.debug("Keyboard output queue worker stopped")
+
+    def cancel_pending_output(self):
+        """Cancel queued and in-flight keyboard output immediately."""
+        self._cancel_output_event.set()
+
+        while True:
+            try:
+                self._output_queue.get_nowait()
+                self._output_queue.task_done()
+            except queue.Empty:
+                break
+
+        logger.debug("Cancelled pending keyboard output")
     
     def should_discard(self, text: str) -> bool:
         """
@@ -128,48 +151,66 @@ class KeyboardTyper:
         
         return False
     
-    def type_final(self, text: str, delay: Optional[float] = None):
+    def type_final(
+        self,
+        text: str,
+        delay: Optional[float] = None,
+        apply_word_mappings: bool = True
+    ):
         """
         Queue final transcription for typing with word mappings applied.
         
         Args:
             text: Final transcription text
             delay: Delay between characters in seconds (uses default if None)
+            apply_word_mappings: Whether configured word mappings should be applied
         """
         if not text:
             return
+
+        self._cancel_output_event.clear()
         
         self._output_queue.put({
             "type": "type_final",
             "text": text,
-            "delay": delay if delay is not None else self.typing_delay_s
+            "delay": delay if delay is not None else self.typing_delay_s,
+            "apply_word_mappings": apply_word_mappings,
         })
     
-    def _do_type_final(self, text: str, delay: float):
+    def _do_type_final(self, text: str, delay: float, apply_word_mappings: bool):
         """
         Actually type final transcription with word mappings applied.
         
         Args:
             text: Final transcription text
             delay: Delay between characters in seconds
+            apply_word_mappings: Whether configured word mappings should be applied
         """
         # Process text and apply word mappings
-        processed_items = self._apply_word_mappings(text)
+        processed_items = self._process_text(text, apply_word_mappings)
         should_append_space = self._should_append_trailing_space(processed_items)
         
         logger.debug(f"Processed items: {repr(processed_items)}")
         
         try:
             for item in processed_items:
+                if self._cancel_output_event.is_set():
+                    logger.debug("Keyboard output cancelled before item completed")
+                    return
+
                 if isinstance(item, dict) and 'hotkey' in item:
                     self._execute_hotkey(item['hotkey'])
                 else:
                     for char in item:
+                        if self._cancel_output_event.is_set():
+                            logger.debug("Keyboard output cancelled during text typing")
+                            return
+
                         self._type_char(char)
                         if delay > 0:
                             time.sleep(delay)
             
-            if should_append_space:
+            if should_append_space and not self._cancel_output_event.is_set():
                 # Append a space after final transcription unless output ends with a newline
                 self._type_char(' ')
             
@@ -177,6 +218,10 @@ class KeyboardTyper:
         
         except Exception as e:
             logger.error(f"Error typing text: {e}")
+
+    def has_exact_word_mapping(self, text: str) -> bool:
+        """Return whether text exactly matches a configured mapping trigger."""
+        return self._normalize_mapping_phrase(text) in self._normalized_word_mappings
 
     def _should_append_trailing_space(self, processed_items) -> bool:
         """Return whether final output should get the default trailing space."""
@@ -190,6 +235,19 @@ class KeyboardTyper:
             return not item.endswith(('\n', '\r'))
 
         return True
+
+    def _normalize_mapping_phrase(self, text: str) -> str:
+        """Normalize text for exact mapping-trigger matching."""
+        return re.sub(r'^[\s\.,!?;:]+|[\s\.,!?;:]+$', '', text.lower().strip())
+
+    def _process_text(self, text: str, apply_word_mappings: bool):
+        """Normalize final text and optionally apply configured mappings."""
+        text = re.sub(r'\.\s*$', '', text)
+
+        if not apply_word_mappings:
+            return [text] if text else []
+
+        return self._apply_word_mappings(text)
     
     def _apply_word_mappings(self, text: str):
         """
@@ -203,9 +261,6 @@ class KeyboardTyper:
         """
         if not self.word_mappings:
             return [text]
-        
-        # Always strip trailing period - Whisper adds them automatically
-        text = re.sub(r'\.\s*$', '', text)
         
         # Sort mappings by length (longest first) to avoid partial matches
         sorted_mappings = sorted(
@@ -287,6 +342,9 @@ class KeyboardTyper:
             
             # Press all keys
             for key in pynput_keys:
+                if self._cancel_output_event.is_set():
+                    logger.debug("Keyboard hotkey cancelled before key press")
+                    return
                 self.controller.press(key)
                 time.sleep(0.01)
             
@@ -327,6 +385,9 @@ class KeyboardTyper:
             char: Character to type
         """
         try:
+            if self._cancel_output_event.is_set():
+                return
+
             # Check if this is a shifted character that needs explicit Shift + base_key
             if char in self.SPECIAL_CHAR_KEY_MAP:
                 key = self.SPECIAL_CHAR_KEY_MAP[char]

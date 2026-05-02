@@ -39,6 +39,13 @@ word_mappings:
   "now cut": "ctrl+x"
   "now save": "ctrl+s"
 
+# Command mappings: exact spoken phrases -> shell commands
+# Matching lowercases and strips non-letters down to word separators before comparison.
+# These run only when the full buffered phrase exactly matches after a pause.
+command_mappings:
+  "work password": "~/wlogin.sh"
+  "work duo": "~/duo.sh"
+
 # Sound effects
 sounds:
   enabled: true

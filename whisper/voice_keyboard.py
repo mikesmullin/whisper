@@ -6,10 +6,14 @@ and types them to the active window via keyboard simulation.
 """
 
 import logging
+import os
+import re
 import signal
+import subprocess
 import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 from whisper.config import Config
@@ -42,6 +46,15 @@ class VoiceKeyboard:
         
         # Statistics
         self.transcription_count = 0
+
+        # Buffer adjacent utterances so exact-match mappings only trigger after a pause
+        self._pending_texts = []
+        self._pending_last_ts: float | None = None
+        self._normalized_command_mappings = {
+            self._normalize_trigger_phrase(phrase): command
+            for phrase, command in config.command_mappings.items()
+        }
+        self._command_shell = os.environ.get('SHELL') or '/bin/bash'
         
         # Polling thread
         self._polling_thread: threading.Thread = None
@@ -138,6 +151,8 @@ class VoiceKeyboard:
             return
         
         self.is_listening = False
+        self.typer.cancel_pending_output()
+        self._discard_pending_transcriptions()
         self.log("⏸️  Listening stopped")
         
         # Play sound
@@ -145,7 +160,7 @@ class VoiceKeyboard:
             self.sound.play(self.config.sound_on_listening_stop)
         
         # Stop polling
-        self._stop_polling()
+        self._stop_polling(flush_pending=False)
     
     def _start_polling(self):
         """Start the polling thread"""
@@ -161,13 +176,104 @@ class VoiceKeyboard:
         self._polling_thread.start()
         logger.debug("Polling thread started")
     
-    def _stop_polling(self):
+    def _stop_polling(self, flush_pending: bool = True):
         """Stop the polling thread"""
         self._polling_stop_event.set()
         if self._polling_thread:
             self._polling_thread.join(timeout=1.0)
             self._polling_thread = None
+        if flush_pending:
+            self._flush_pending_transcriptions()
+        else:
+            self._discard_pending_transcriptions()
         logger.debug("Polling thread stopped")
+
+    def _get_transcription_timestamp(self, item) -> float:
+        """Get a comparable timestamp for a transcription item."""
+        ts = item.get('ts')
+        if ts:
+            try:
+                return datetime.fromisoformat(ts).timestamp()
+            except ValueError:
+                logger.debug(f"Could not parse transcription timestamp: {ts}")
+
+        return time.time()
+
+    def _normalize_trigger_phrase(self, text: str) -> str:
+        """Normalize buffered text for exact-match command lookups."""
+        normalized = re.sub(r'[^a-z]+', ' ', text.lower().strip())
+        return re.sub(r'\s+', ' ', normalized).strip()
+
+    def _get_command_mapping(self, text: str) -> str | None:
+        """Return the configured shell command for an exact-match phrase."""
+        return self._normalized_command_mappings.get(self._normalize_trigger_phrase(text))
+
+    def _run_command_mapping(self, spoken_phrase: str, command: str):
+        """Launch a configured shell command asynchronously."""
+        try:
+            if self.config.sounds_enabled:
+                self.sound.play(self.config.sound_on_command_mapping)
+
+            subprocess.Popen(
+                command,
+                shell=True,
+                executable=self._command_shell,
+                cwd=str(self.config.config_path.parent),
+                start_new_session=True,
+            )
+            logger.info(f"Ran command mapping for {spoken_phrase!r}: {command}")
+        except Exception as e:
+            logger.error(f"Error running command mapping {spoken_phrase!r}: {e}")
+            self.log(f"[Command Error]: {spoken_phrase}")
+
+    def _buffer_transcription(self, text: str, item_ts: float):
+        """Add a transcription to the pending pause buffer."""
+        if self._pending_last_ts is not None:
+            gap = item_ts - self._pending_last_ts
+            if gap >= self.config.word_mapping_pause_threshold_s:
+                self._flush_pending_transcriptions()
+
+        self._pending_texts.append(text)
+        self._pending_last_ts = item_ts
+
+    def _discard_pending_transcriptions(self):
+        """Discard any buffered transcriptions without typing them."""
+        self._pending_texts = []
+        self._pending_last_ts = None
+
+    def _flush_pending_transcriptions(self):
+        """Emit any buffered transcriptions as raw text or an exact-match mapping."""
+        if not self._pending_texts:
+            return
+
+        buffered_text = ' '.join(text.strip() for text in self._pending_texts if text.strip())
+        self._pending_texts = []
+        self._pending_last_ts = None
+
+        if not buffered_text:
+            return
+
+        command = self._get_command_mapping(buffered_text)
+        apply_word_mappings = self.typer.has_exact_word_mapping(buffered_text)
+
+        self.transcription_count += 1
+        if command:
+            self.log(f"[Command]: {buffered_text}")
+            self._run_command_mapping(buffered_text, command)
+        elif apply_word_mappings:
+            self.log(f"[Mapping]: {buffered_text}")
+            self.typer.type_final(buffered_text, apply_word_mappings=True)
+        else:
+            self.log(f"[Typing]: {buffered_text}")
+            self.typer.type_final(buffered_text, apply_word_mappings=False)
+
+    def _flush_ready_buffer(self):
+        """Flush pending text once the configured pause has elapsed."""
+        if self._pending_last_ts is None:
+            return
+
+        if time.time() - self._pending_last_ts >= self.config.word_mapping_pause_threshold_s:
+            self._flush_pending_transcriptions()
     
     def _polling_loop(self):
         """Poll perception-voice server for new transcriptions"""
@@ -192,12 +298,10 @@ class VoiceKeyboard:
                     if self.typer.should_discard(text):
                         self.log(f"[Discarded]: {text}")
                         continue
-                    
-                    self.transcription_count += 1
-                    self.log(f"[Typing]: {text}")
-                    
-                    # Type the text
-                    self.typer.type_final(text)
+
+                    self._buffer_transcription(text, self._get_transcription_timestamp(item))
+
+                self._flush_ready_buffer()
             
             except Exception as e:
                 logger.error(f"Polling error: {e}")
@@ -242,7 +346,7 @@ class VoiceKeyboard:
         self.is_listening = False
         
         # Stop polling
-        self._stop_polling()
+        self._stop_polling(flush_pending=False)
         
         # Stop hotkey listener
         if self.hotkey_listener:

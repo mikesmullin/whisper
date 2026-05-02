@@ -19,7 +19,8 @@ Wants=perception-voice.service
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/whisper
+Environment=PATH=%h/.bun/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/bash -lc '%h/.local/bin/whisper'
 Restart=on-failure
 RestartSec=5
 

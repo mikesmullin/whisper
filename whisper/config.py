@@ -21,6 +21,7 @@ DEFAULT_CONFIG = {
     "keyboard": {
         "typing_delay_ms": 20,
         "key_hold_ms": 20,
+        "word_mapping_pause_threshold_s": 0.8,
         "discard_phrases": [
             "thank you",
             "thanks",
@@ -49,6 +50,7 @@ DEFAULT_CONFIG = {
         "enabled": True,
         "on_listening_start": "sfx/on.wav",
         "on_listening_stop": "sfx/off.wav",
+        "on_command_mapping": "sfx/activate.wav",
         "listening_state_delay_ms": 200,
     },
     "polling": {
@@ -161,6 +163,11 @@ class Config:
     def key_hold_ms(self) -> int:
         """Get key hold time in milliseconds"""
         return self.get('keyboard.key_hold_ms', 20)
+
+    @property
+    def word_mapping_pause_threshold_s(self) -> float:
+        """Get pause duration required before buffered text is emitted."""
+        return self.get('keyboard.word_mapping_pause_threshold_s', 0.8)
     
     @property
     def discard_phrases(self) -> Set[str]:
@@ -172,6 +179,15 @@ class Config:
     def word_mappings(self) -> Dict[str, str]:
         """Get word to keystroke mappings"""
         return self.get('word_mappings', {})
+
+    @property
+    def command_mappings(self) -> Dict[str, str]:
+        """Get exact-match spoken phrases that should run shell commands."""
+        command_mappings = self.get('command_mappings')
+        if command_mappings is not None:
+            return command_mappings
+
+        return self.get('agent.commands', {})
     
     @property
     def sounds_enabled(self) -> bool:
@@ -187,6 +203,11 @@ class Config:
     def sound_on_listening_stop(self) -> str:
         """Get listening stop sound file"""
         return self.get('sounds.on_listening_stop', 'sfx/off.wav')
+
+    @property
+    def sound_on_command_mapping(self) -> str:
+        """Get command-mapping activation sound file."""
+        return self.get('sounds.on_command_mapping', 'sfx/activate.wav')
     
     @property
     def listening_state_delay_ms(self) -> int:

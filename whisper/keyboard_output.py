@@ -173,15 +173,51 @@ class KeyboardTyper:
             "text": text,
         })
 
+    def _xclip_read(self) -> bytes | None:
+        """Return current clipboard contents as bytes, or None on failure."""
+        import subprocess
+        try:
+            proc = subprocess.run(
+                ['xclip', '-selection', 'clipboard', '-o'],
+                capture_output=True,
+            )
+            # xclip exits non-zero when clipboard is empty; treat that as b''
+            return proc.stdout
+        except FileNotFoundError:
+            logger.error("xclip not found; install it with: sudo apt install xclip")
+            return None
+        except Exception as e:
+            logger.warning(f"Clipboard read failed: {e}")
+            return None
+
+    def _xclip_write(self, data: bytes) -> bool:
+        """Write bytes to the clipboard. Returns True on success."""
+        import subprocess
+        try:
+            proc = subprocess.Popen(
+                ['xclip', '-selection', 'clipboard'],
+                stdin=subprocess.PIPE,
+            )
+            proc.communicate(data)
+            if proc.returncode != 0:
+                logger.error(f"xclip write failed with return code {proc.returncode}")
+                return False
+            return True
+        except FileNotFoundError:
+            logger.error("xclip not found; install it with: sudo apt install xclip")
+            return False
+        except Exception as e:
+            logger.error(f"Clipboard write failed: {e}")
+            return False
+
     def _do_type_clipboard(self, text: str):
         """
-        Write processed text to the clipboard (via xclip) then send Ctrl+V.
+        Write processed text to the clipboard (via xclip) then send Ctrl+V,
+        restoring the previous clipboard contents afterwards.
 
         Args:
             text: Final transcription text (word mappings will be applied)
         """
-        import subprocess
-
         processed_items = self._process_text(text, apply_word_mappings=True)
 
         # Collect text portions; execute hotkey items normally
@@ -203,38 +239,22 @@ class KeyboardTyper:
         if not combined or self._cancel_output_event.is_set():
             return
 
-        try:
-            proc = subprocess.Popen(
-                ['xclip', '-selection', 'clipboard'],
-                stdin=subprocess.PIPE,
-            )
-            proc.communicate(combined.encode('utf-8'))
-            if proc.returncode != 0:
-                logger.error(f"xclip failed with return code {proc.returncode}")
-                return
-        except FileNotFoundError:
-            logger.error("xclip not found; install it with: sudo apt install xclip")
-            return
-        except Exception as e:
-            logger.error(f"Clipboard write failed: {e}")
+        # Backup existing clipboard contents (None means xclip unavailable)
+        previous = self._xclip_read()
+
+        if not self._xclip_write(combined.encode('utf-8')):
             return
 
         if self._cancel_output_event.is_set():
+            self._xclip_write(previous if previous is not None else b'')
             return
 
         # Paste
         self._execute_hotkey('ctrl+v')
         logger.info(f"Clipboard-pasted: {repr(combined)}")
 
-        # Clear clipboard so the transcription doesn't linger
-        try:
-            proc = subprocess.Popen(
-                ['xclip', '-selection', 'clipboard'],
-                stdin=subprocess.PIPE,
-            )
-            proc.communicate(b'')
-        except Exception as e:
-            logger.warning(f"Clipboard clear failed: {e}")
+        # Restore previous clipboard contents
+        self._xclip_write(previous if previous is not None else b'')
 
     def type_final(
         self,

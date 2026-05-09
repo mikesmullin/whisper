@@ -4,9 +4,12 @@
 perception_voice:
   socket_path: "tmp/perception-voice/perception.sock"
 
-# Hotkey to toggle listening on/off
+# Hotkeys to toggle listening on/off
 shortcuts:
+  # sendkeys mode: transcription is typed character-by-character
   toggle_listening: "ctrl+shift+space"
+  # clipboard mode: transcription is written to clipboard then pasted via Ctrl+V
+  toggle_listening_clipboard: "alt+space"
 
 # Keyboard typing configuration
 keyboard:

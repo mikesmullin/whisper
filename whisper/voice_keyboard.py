@@ -40,6 +40,7 @@ class VoiceKeyboard:
         
         self.is_running = False
         self.is_listening = False
+        self._clipboard_mode = False  # set by alt+space hotkey; cleared by ctrl+shift+space
         
         # Timestamp tracking for logging
         self.start_time = time.time()
@@ -81,21 +82,36 @@ class VoiceKeyboard:
         self.hotkey_listener = None
         if config.toggle_listening_shortcut:
             from pynput.keyboard import GlobalHotKeys
-            
-            hotkey_str = config.toggle_listening_shortcut
-            
-            # Convert our format to pynput format
-            # "ctrl+shift+space" -> "<ctrl>+<shift>+<space>"
-            parts = [f"<{part.strip()}>" for part in hotkey_str.split('+')]
-            pynput_hotkey = '+'.join(parts)
-            
-            self.log(f"Registering hotkey: {hotkey_str} -> {pynput_hotkey}")
-            
-            def on_activate():
-                logger.debug("Hotkey activated!")
+
+            def _to_pynput(hotkey_str: str) -> str:
+                parts = [f"<{part.strip()}>" for part in hotkey_str.split('+')]
+                return '+'.join(parts)
+
+            hotkeys = {}
+
+            sendkeys_str = config.toggle_listening_shortcut
+            sendkeys_pynput = _to_pynput(sendkeys_str)
+            self.log(f"Registering hotkey (sendkeys): {sendkeys_str} -> {sendkeys_pynput}")
+
+            def on_activate_sendkeys():
+                logger.debug("Sendkeys hotkey activated")
+                self._clipboard_mode = False
                 self.toggle_listening()
-            
-            hotkeys = {pynput_hotkey: on_activate}
+
+            hotkeys[sendkeys_pynput] = on_activate_sendkeys
+
+            clipboard_str = config.toggle_listening_clipboard_shortcut
+            if clipboard_str:
+                clipboard_pynput = _to_pynput(clipboard_str)
+                self.log(f"Registering hotkey (clipboard): {clipboard_str} -> {clipboard_pynput}")
+
+                def on_activate_clipboard():
+                    logger.debug("Clipboard hotkey activated")
+                    self._clipboard_mode = True
+                    self.toggle_listening()
+
+                hotkeys[clipboard_pynput] = on_activate_clipboard
+
             self.hotkey_listener = GlobalHotKeys(hotkeys)
         
         self.log("✓ Whisper v2 Voice Keyboard initialized")
@@ -260,6 +276,9 @@ class VoiceKeyboard:
         if command:
             self.log(f"[Command]: {buffered_text}")
             self._run_command_mapping(buffered_text, command)
+        elif self._clipboard_mode:
+            self.log(f"[Clipboard]: {buffered_text}")
+            self.typer.type_clipboard(buffered_text)
         elif apply_word_mappings:
             self.log(f"[Mapping]: {buffered_text}")
             self.typer.type_final(buffered_text, apply_word_mappings=True)

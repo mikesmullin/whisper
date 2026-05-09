@@ -99,6 +99,8 @@ class KeyboardTyper:
                         task["delay"],
                         task.get("apply_word_mappings", True)
                     )
+                elif task_type == "type_clipboard":
+                    self._do_type_clipboard(task["text"])
                 else:
                     logger.warning(f"Unknown queue task type: {task_type}")
             
@@ -151,6 +153,89 @@ class KeyboardTyper:
         
         return False
     
+    def type_clipboard(self, text: str):
+        """
+        Queue text to be written to the clipboard then pasted via Ctrl+V.
+
+        Word-mapping text substitutions are applied; hotkey-type mappings are
+        executed via pynput as usual.  Only the text portions go to the
+        clipboard so the paste is atomic.
+
+        Args:
+            text: Final transcription text
+        """
+        if not text:
+            return
+
+        self._cancel_output_event.clear()
+        self._output_queue.put({
+            "type": "type_clipboard",
+            "text": text,
+        })
+
+    def _do_type_clipboard(self, text: str):
+        """
+        Write processed text to the clipboard (via xclip) then send Ctrl+V.
+
+        Args:
+            text: Final transcription text (word mappings will be applied)
+        """
+        import subprocess
+
+        processed_items = self._process_text(text, apply_word_mappings=True)
+
+        # Collect text portions; execute hotkey items normally
+        text_parts = []
+        for item in processed_items:
+            if self._cancel_output_event.is_set():
+                logger.debug("Clipboard output cancelled")
+                return
+            if isinstance(item, dict) and 'hotkey' in item:
+                self._execute_hotkey(item['hotkey'])
+            else:
+                text_parts.append(item)
+
+        # Append trailing space the same way the sendkeys path does
+        combined = ''.join(text_parts)
+        if combined and not combined.endswith(('\n', '\r')):
+            combined += ' '
+
+        if not combined or self._cancel_output_event.is_set():
+            return
+
+        try:
+            proc = subprocess.Popen(
+                ['xclip', '-selection', 'clipboard'],
+                stdin=subprocess.PIPE,
+            )
+            proc.communicate(combined.encode('utf-8'))
+            if proc.returncode != 0:
+                logger.error(f"xclip failed with return code {proc.returncode}")
+                return
+        except FileNotFoundError:
+            logger.error("xclip not found; install it with: sudo apt install xclip")
+            return
+        except Exception as e:
+            logger.error(f"Clipboard write failed: {e}")
+            return
+
+        if self._cancel_output_event.is_set():
+            return
+
+        # Paste
+        self._execute_hotkey('ctrl+v')
+        logger.info(f"Clipboard-pasted: {repr(combined)}")
+
+        # Clear clipboard so the transcription doesn't linger
+        try:
+            proc = subprocess.Popen(
+                ['xclip', '-selection', 'clipboard'],
+                stdin=subprocess.PIPE,
+            )
+            proc.communicate(b'')
+        except Exception as e:
+            logger.warning(f"Clipboard clear failed: {e}")
+
     def type_final(
         self,
         text: str,

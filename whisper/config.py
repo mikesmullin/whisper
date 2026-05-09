@@ -153,6 +153,11 @@ class Config:
     def toggle_listening_shortcut(self) -> str:
         """Get toggle listening hotkey"""
         return self.get('shortcuts.toggle_listening', 'ctrl+shift+space')
+
+    @property
+    def toggle_listening_clipboard_shortcut(self) -> str | None:
+        """Get clipboard-paste mode toggle listening hotkey, or None if not configured"""
+        return self.get('shortcuts.toggle_listening_clipboard', None)
     
     @property
     def typing_delay_ms(self) -> int:

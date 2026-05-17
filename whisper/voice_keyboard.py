@@ -55,6 +55,11 @@ class VoiceKeyboard:
             self._normalize_trigger_phrase(phrase): command
             for phrase, command in config.command_mappings.items()
         }
+        self._normalized_activation_keywords = {
+            self._normalize_trigger_phrase(phrase): action
+            for phrase, action in config.activation_keywords.items()
+        }
+        self._output_enabled_at: float = 0.0
         self._command_shell = os.environ.get('SHELL') or '/bin/bash'
         
         # Polling thread
@@ -153,13 +158,12 @@ class VoiceKeyboard:
         if self.config.sounds_enabled:
             self.sound.play(self.config.sound_on_listening_start)
         
-        # Set read marker to now (discard any old transcriptions)
-        if not self.perception_client.set_read_marker():
-            self.log("⚠️  Failed to set read marker")
+        # Tell the server to discard anything transcribed before this moment
+        self.perception_client.set_read_marker()
         
-        # Start polling after delay
+        # Gate text output until the delay has elapsed (lets the key-press audio settle)
         delay = self.config.listening_state_delay_ms / 1000.0
-        threading.Timer(delay, self._start_polling).start()
+        self._output_enabled_at = time.time() + delay
     
     def stop_listening(self):
         """Stop listening mode"""
@@ -174,15 +178,9 @@ class VoiceKeyboard:
         # Play sound
         if self.config.sounds_enabled:
             self.sound.play(self.config.sound_on_listening_stop)
-        
-        # Stop polling
-        self._stop_polling(flush_pending=False)
     
     def _start_polling(self):
-        """Start the polling thread"""
-        if not self.is_listening:
-            return
-        
+        """Start the always-on polling thread"""
         self._polling_stop_event.clear()
         self._polling_thread = threading.Thread(
             target=self._polling_loop,
@@ -242,6 +240,37 @@ class VoiceKeyboard:
             logger.error(f"Error running command mapping {spoken_phrase!r}: {e}")
             self.log(f"[Command Error]: {spoken_phrase}")
 
+    def _match_activation_keyword(self, text: str) -> str | None:
+        """Return the configured action for an always-on activation keyword, or None."""
+        return self._normalized_activation_keywords.get(self._normalize_trigger_phrase(text))
+
+    def _execute_activation_keyword(self, spoken_phrase: str, action: str):
+        """Execute an activation keyword action (magic string or shell command)."""
+        MAGIC_ACTIONS = frozenset({
+            'LISTENING_ON', 'LISTENING_OFF', 'LISTENING_TOGGLE',
+            'LISTENING_ON_CLIPBOARD', 'LISTENING_TOGGLE_CLIPBOARD',
+        })
+        if action in MAGIC_ACTIONS:
+            if self.config.sounds_enabled:
+                self.sound.play(self.config.sound_on_command_mapping)
+            if action == 'LISTENING_ON':
+                self._clipboard_mode = False
+                self.start_listening()
+            elif action == 'LISTENING_OFF':
+                self.stop_listening()
+            elif action == 'LISTENING_TOGGLE':
+                self._clipboard_mode = False
+                self.toggle_listening()
+            elif action == 'LISTENING_ON_CLIPBOARD':
+                self._clipboard_mode = True
+                self.start_listening()
+            elif action == 'LISTENING_TOGGLE_CLIPBOARD':
+                self._clipboard_mode = True
+                self.toggle_listening()
+        else:
+            # Treat as shell command (same as command_mappings)
+            self._run_command_mapping(spoken_phrase, action)
+
     def _buffer_transcription(self, text: str, item_ts: float):
         """Add a transcription to the pending pause buffer."""
         if self._pending_last_ts is not None:
@@ -295,22 +324,28 @@ class VoiceKeyboard:
             self._flush_pending_transcriptions()
     
     def _polling_loop(self):
-        """Poll perception-voice server for new transcriptions"""
+        """Poll perception-voice server for new transcriptions (always-on)"""
         interval = self.config.polling_interval_ms / 1000.0
         
-        while not self._polling_stop_event.is_set() and self.is_listening:
+        while not self._polling_stop_event.is_set():
             try:
                 transcriptions = self.perception_client.get_transcriptions()
+                output_ready = self.is_listening and time.time() >= self._output_enabled_at
                 
                 for item in transcriptions:
-                    # Check if we should still process (user might have stopped)
-                    if not self.is_listening:
-                        self.log(f"[Cancelled]: {item.get('text', '')}")
-                        break
-                    
                     text = item.get('text', '')
                     
                     if not text:
+                        continue
+                    
+                    # Always check activation keywords, even when not listening
+                    action = self._match_activation_keyword(text)
+                    if action is not None:
+                        self.log(f"[Keyword]: {text} -> {action}")
+                        self._execute_activation_keyword(text, action)
+                        continue
+                    
+                    if not output_ready:
                         continue
                     
                     # Check if text should be discarded
@@ -320,7 +355,8 @@ class VoiceKeyboard:
 
                     self._buffer_transcription(text, self._get_transcription_timestamp(item))
 
-                self._flush_ready_buffer()
+                if output_ready:
+                    self._flush_ready_buffer()
             
             except Exception as e:
                 logger.error(f"Polling error: {e}")
@@ -348,6 +384,10 @@ class VoiceKeyboard:
             self.log("🎙️  Ready! Press hotkey to toggle listening... (Ctrl+C to quit)")
         else:
             self.log("🎙️  Ready! (Ctrl+C to quit)")
+        
+        # Discard stale server transcriptions from before startup, then begin always-on polling
+        self.perception_client.set_read_marker()
+        self._start_polling()
         
         # Keep running
         try:

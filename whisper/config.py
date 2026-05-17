@@ -193,6 +193,11 @@ class Config:
             return command_mappings
 
         return self.get('agent.commands', {})
+
+    @property
+    def activation_keywords(self) -> Dict[str, str]:
+        """Get always-on activation keyword mappings (checked even when not listening)."""
+        return self.get('activation_keywords', {})
     
     @property
     def sounds_enabled(self) -> bool:

@@ -49,6 +49,21 @@ command_mappings:
   "work password": "~/wlogin.sh"
   "work duo": "~/duo.sh"
 
+# Activation keywords: always-on phrases checked even when listening is OFF.
+# Values can be magic strings or shell commands.
+#
+# Magic strings:
+#   LISTENING_ON               - start listening (sendkeys mode)
+#   LISTENING_OFF              - stop listening
+#   LISTENING_TOGGLE           - toggle listening (sendkeys mode)
+#   LISTENING_ON_CLIPBOARD     - start listening (clipboard-paste mode)
+#   LISTENING_TOGGLE_CLIPBOARD - toggle listening (clipboard-paste mode)
+#
+# activation_keywords:
+#   "work activate": LISTENING_ON
+#   "work deactivate": LISTENING_OFF
+#   "work clipboard": LISTENING_ON_CLIPBOARD
+
 # Sound effects
 sounds:
   enabled: true

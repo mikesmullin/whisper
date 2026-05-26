@@ -13,6 +13,7 @@ authors = [
     {name = "whisper", email = "whisper@example.com"}
 ]
 dependencies = [
+    "pygame>=2.6.1",
     "pynput>=1.7.6",
     "pyyaml>=6.0",
 ]

@@ -17,6 +17,8 @@ DEFAULT_CONFIG = {
     },
     "shortcuts": {
         "toggle_listening": "ctrl+shift+space",
+        "push_to_talk": False,
+        "buffer_until_release": True,
     },
     "keyboard": {
         "typing_delay_ms": 20,
@@ -51,6 +53,8 @@ DEFAULT_CONFIG = {
         "on_listening_start": "sfx/on.wav",
         "on_listening_stop": "sfx/off.wav",
         "on_command_mapping": "sfx/activate.wav",
+        "on_word_buffered": "sfx/word.wav",
+        "word_buffer_sfx_throttle": 20,
         "listening_state_delay_ms": 200,
     },
     "polling": {
@@ -155,6 +159,16 @@ class Config:
         return self.get('shortcuts.toggle_listening', 'ctrl+shift+space')
 
     @property
+    def push_to_talk(self) -> bool:
+        """Whether hotkeys use push-to-talk (hold) instead of toggle"""
+        return bool(self.get('shortcuts.push_to_talk', False))
+
+    @property
+    def buffer_until_release(self) -> bool:
+        """Whether to hold transcription output until the PTT key is released"""
+        return bool(self.get('shortcuts.buffer_until_release', True))
+
+    @property
     def toggle_listening_clipboard_shortcut(self) -> str | None:
         """Get clipboard-paste mode toggle listening hotkey, or None if not configured"""
         return self.get('shortcuts.toggle_listening_clipboard', None)
@@ -218,7 +232,17 @@ class Config:
     def sound_on_command_mapping(self) -> str:
         """Get command-mapping activation sound file."""
         return self.get('sounds.on_command_mapping', 'sfx/activate.wav')
-    
+
+    @property
+    def sound_on_word_buffered(self) -> str:
+        """Get sound played for each word buffered during push-to-talk hold."""
+        return self.get('sounds.on_word_buffered', 'sfx/word.wav')
+
+    @property
+    def word_buffer_sfx_throttle_ms(self) -> int:
+        """Minimum delay (ms) between consecutive word-buffered sfx shots."""
+        return int(self.get('sounds.word_buffer_sfx_throttle', 20))
+
     @property
     def listening_state_delay_ms(self) -> int:
         """Get delay before state change takes effect"""

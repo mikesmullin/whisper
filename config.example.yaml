@@ -10,6 +10,8 @@ shortcuts:
   toggle_listening: "ctrl+shift+space"
   # clipboard mode: transcription is written to clipboard then pasted via Ctrl+V
   toggle_listening_clipboard: "alt+space"
+  # push_to_talk: false  # when true: hold key to listen, release to stop
+  # buffer_until_release: true  # hold transcription output until key release (no-op without push_to_talk)
 
 # Keyboard typing configuration
 keyboard:

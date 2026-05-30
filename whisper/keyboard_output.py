@@ -314,10 +314,11 @@ class KeyboardTyper:
 
                         # When the same key is typed back-to-back, the USB HID host
                         # may not see the key-up report before the next key-down if
-                        # the gap is only one polling interval (~8ms). Add an extra
-                        # typing_delay to guarantee a visible key-up period.
-                        if char == prev_char and self.typing_delay_s > 0:
-                            time.sleep(self.typing_delay_s)
+                        # the gap is only one polling interval (~8ms at 125Hz).
+                        # Ensure at least 20ms (2.5x the polling interval) of
+                        # key-up visibility, regardless of typing_delay_ms setting.
+                        if char == prev_char:
+                            time.sleep(max(self.typing_delay_s, 0.020))
 
                         self._type_char(char)
                         prev_char = char

@@ -332,11 +332,10 @@ class VoiceKeyboard:
             self._run_command_mapping(spoken_phrase, action)
 
     def _word_sfx_loop(self):
-        """Drain word-sfx shot queue, playing one shot per word with throttle delay."""
+        """Drain word-sfx shot queue, playing one shot per buffer append."""
         while True:
             self._word_sfx_sem.acquire()
             self.sound.play(self.config.sound_on_word_buffered, async_play=False)
-            time.sleep(self.config.word_buffer_sfx_throttle_ms / 1000.0)
 
     def _buffer_transcription(self, text: str, item_ts: float):
         """Add a transcription to the pending pause buffer."""
@@ -352,9 +351,7 @@ class VoiceKeyboard:
         self._pending_last_ts = item_ts
 
         if ptt_hold and self.config.sounds_enabled:
-            word_count = len(text.split())
-            for _ in range(word_count):
-                self._word_sfx_sem.release()
+            self._word_sfx_sem.release()
 
     def _discard_pending_transcriptions(self):
         """Discard any buffered transcriptions without typing them."""

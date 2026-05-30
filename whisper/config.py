@@ -54,7 +54,6 @@ DEFAULT_CONFIG = {
         "on_listening_stop": "sfx/off.wav",
         "on_command_mapping": "sfx/activate.wav",
         "on_word_buffered": "sfx/word.wav",
-        "word_buffer_sfx_throttle": 20,
         "listening_state_delay_ms": 200,
     },
     "polling": {
@@ -237,11 +236,6 @@ class Config:
     def sound_on_word_buffered(self) -> str:
         """Get sound played for each word buffered during push-to-talk hold."""
         return self.get('sounds.on_word_buffered', 'sfx/word.wav')
-
-    @property
-    def word_buffer_sfx_throttle_ms(self) -> int:
-        """Minimum delay (ms) between consecutive word-buffered sfx shots."""
-        return int(self.get('sounds.word_buffer_sfx_throttle', 20))
 
     @property
     def listening_state_delay_ms(self) -> int:

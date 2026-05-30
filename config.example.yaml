@@ -12,13 +12,16 @@ shortcuts:
   toggle_listening_clipboard: "alt+space"
   # push_to_talk: false  # when true: hold key to listen, release to stop
   # buffer_until_release: true  # hold transcription output until key release (no-op without push_to_talk)
+  # Delay (ms) after releasing PTT before typing begins (debounce for key-release events)
+  ptt_release_delay_ms: 250
 
 # Keyboard typing configuration
 keyboard:
   # Milliseconds delay between each keystroke (prevents skipping in some input contexts)
-  typing_delay_ms: 20
+  # 4ms works well for USB HID gadget (Orange Pi kvm-server); increase if keys are dropped
+  typing_delay_ms: 4
   # Milliseconds to hold key down before release (for SDL2/game input compatibility)
-  key_hold_ms: 20
+  key_hold_ms: 4
   # Phrases to discard (misheard sounds like coughs/sneezes)
   discard_phrases:
     - "thank you"
@@ -72,11 +75,12 @@ sounds:
   on_listening_start: "sfx/squelch-on.wav"
   on_listening_stop: "sfx/click-off.wav"
   # Delay (ms) after hotkey press before resuming/pausing audio polling
-  listening_state_delay_ms: 200
+  listening_state_delay_ms: 50
 
-# Polling interval for checking perception-voice server (seconds)
+# Polling interval for checking perception-voice server (ms)
+# Lower = less latency between transcription finishing and text appearing
 polling:
-  interval_ms: 100
+  interval_ms: 25
 
 # Logging
 logging:

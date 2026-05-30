@@ -228,7 +228,11 @@ class VoiceKeyboard:
         if flush_buffer:
             # Give the OS time to register the key-release events before typing begins,
             # so the first keystroke isn't accidentally interpreted as a combo.
-            time.sleep(0.5)
+            # Configurable via shortcuts.ptt_release_delay_ms (default 500ms, 50ms is
+            # safe once VS Code's ctrl+shift+space keybinding is removed).
+            delay = self.config.ptt_release_delay_ms / 1000.0
+            if delay > 0:
+                time.sleep(delay)
             self._flush_pending_transcriptions()
         else:
             self.typer.cancel_pending_output()

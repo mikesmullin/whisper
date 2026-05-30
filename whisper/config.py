@@ -243,6 +243,15 @@ class Config:
         return self.get('sounds.listening_state_delay_ms', 200)
     
     @property
+    def ptt_release_delay_ms(self) -> int:
+        """Delay (ms) after releasing PTT before typing begins.
+
+        Historically set high to avoid Ctrl+Shift triggering IntelliSense in VS Code.
+        After removing that keybinding, 50ms is sufficient for key-release debounce.
+        """
+        return self.get('shortcuts.ptt_release_delay_ms', 500)
+
+    @property
     def polling_interval_ms(self) -> int:
         """Get polling interval in milliseconds"""
         return self.get('polling.interval_ms', 100)

@@ -306,12 +306,21 @@ class KeyboardTyper:
                 if isinstance(item, dict) and 'hotkey' in item:
                     self._execute_hotkey(item['hotkey'])
                 else:
+                    prev_char = None
                     for char in item:
                         if self._cancel_output_event.is_set():
                             logger.debug("Keyboard output cancelled during text typing")
                             return
 
+                        # When the same key is typed back-to-back, the USB HID host
+                        # may not see the key-up report before the next key-down if
+                        # the gap is only one polling interval (~8ms). Add an extra
+                        # typing_delay to guarantee a visible key-up period.
+                        if char == prev_char and self.typing_delay_s > 0:
+                            time.sleep(self.typing_delay_s)
+
                         self._type_char(char)
+                        prev_char = char
                         if delay > 0:
                             time.sleep(delay)
             

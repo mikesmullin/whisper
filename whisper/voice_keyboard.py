@@ -52,10 +52,20 @@ class VoiceKeyboard:
         # Buffer adjacent utterances so exact-match mappings only trigger after a pause
         self._pending_texts = []
         self._pending_last_ts: float | None = None
-        self._normalized_command_mappings = {
-            self._normalize_trigger_phrase(phrase): command
-            for phrase, command in config.command_mappings.items()
-        }
+        self._normalized_command_mappings = {}
+        self._wildcard_command_mappings = []  # (prefix_norm, suffix_norm, n_prefix, n_suffix, command_template)
+        for phrase, command in config.command_mappings.items():
+            if '*' in phrase:
+                parts = phrase.split('*', 1)
+                prefix_norm = self._normalize_trigger_phrase(parts[0])
+                suffix_norm = self._normalize_trigger_phrase(parts[1])
+                n_prefix = len(prefix_norm.split()) if prefix_norm else 0
+                n_suffix = len(suffix_norm.split()) if suffix_norm else 0
+                self._wildcard_command_mappings.append(
+                    (prefix_norm, suffix_norm, n_prefix, n_suffix, command)
+                )
+            else:
+                self._normalized_command_mappings[self._normalize_trigger_phrase(phrase)] = command
         self._normalized_activation_keywords = {
             self._normalize_trigger_phrase(phrase): action
             for phrase, action in config.activation_keywords.items()
@@ -278,8 +288,23 @@ class VoiceKeyboard:
         return re.sub(r'\s+', ' ', normalized).strip()
 
     def _get_command_mapping(self, text: str) -> str | None:
-        """Return the configured shell command for an exact-match phrase."""
-        return self._normalized_command_mappings.get(self._normalize_trigger_phrase(text))
+        """Return the configured shell command for an exact-match or wildcard phrase."""
+        norm = self._normalize_trigger_phrase(text)
+
+        if norm in self._normalized_command_mappings:
+            return self._normalized_command_mappings[norm]
+
+        for prefix_norm, suffix_norm, n_prefix, n_suffix, command_template in self._wildcard_command_mappings:
+            prefix_ok = (not prefix_norm) or (norm == prefix_norm or norm.startswith(prefix_norm + ' '))
+            suffix_ok = (not suffix_norm) or (norm == suffix_norm or norm.endswith(' ' + suffix_norm))
+            if not (prefix_ok and suffix_ok):
+                continue
+            words = text.split()
+            end_idx = len(words) - n_suffix if n_suffix else len(words)
+            captured = ' '.join(words[n_prefix:end_idx])
+            return command_template.replace('$WORDS', captured)
+
+        return None
 
     def _run_command_mapping(self, spoken_phrase: str, command: str):
         """Launch a configured shell command asynchronously."""

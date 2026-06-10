@@ -50,9 +50,15 @@ word_mappings:
 # Command mappings: exact spoken phrases -> shell commands
 # Matching lowercases and strips non-letters down to word separators before comparison.
 # These run only when the full buffered phrase exactly matches after a pause.
+#
+# Wildcard (*) support: use * to capture any words spoken after the prefix.
+# The captured words are substituted wherever $WORDS appears in the command.
+# Example: saying "home agent turn the lights blue" runs the command with
+#   $WORDS = "turn the lights blue"
 command_mappings:
   "work password": "~/wlogin.sh"
   "work duo": "~/duo.sh"
+  # "home agent *": cd /workspace/agl && bun src/agents/home.mjs "$WORDS"
 
 # Activation keywords: always-on phrases checked even when listening is OFF.
 # Values can be magic strings or shell commands.

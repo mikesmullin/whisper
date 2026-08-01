@@ -32,6 +32,11 @@ word_mappings:
   "new line": "\n"
   "insert bullet": "- "
   "completion": "\t"
+
+  # Placeholders: {{clipboard}} is replaced with the current clipboard
+  # contents (read via xclip) at the moment the mapping is spoken.
+  "insert citation": "- {{clipboard}}:"
+
   "end of sentence": "."
   "dot": "."
   "comma": ","

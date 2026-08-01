@@ -408,16 +408,27 @@ class KeyboardTyper:
         for part in parts:
             if part.startswith('<<<MARKER_'):
                 replacement = replacements.get(part, '')
-                
-                # Check if replacement is a hotkey
+
+                # Check if replacement is a hotkey (before placeholder
+                # resolution, since resolved clipboard content could
+                # otherwise coincidentally look like one)
                 if '+' in replacement and len(replacement) < 20:
                     items.append({'hotkey': replacement})
                 elif replacement:
-                    items.append(replacement)
+                    items.append(self._resolve_placeholders(replacement))
             elif part.strip():
                 items.append(part)
-        
+
         return items if items else [text]
+
+    def _resolve_placeholders(self, text: str) -> str:
+        """Resolve {{clipboard}} placeholders in a word-mapping replacement."""
+        if '{{clipboard}}' not in text:
+            return text
+
+        data = self._xclip_read()
+        clipboard_text = data.decode('utf-8', errors='replace') if data else ''
+        return text.replace('{{clipboard}}', clipboard_text)
     
     def _execute_hotkey(self, hotkey_str: str):
         """

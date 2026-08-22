@@ -9,7 +9,7 @@ import threading
 import time
 from typing import Dict, Optional, Set
 
-from pynput.keyboard import Controller, Key
+from pynput.keyboard import Controller, Key, KeyCode
 
 logger = logging.getLogger(__name__)
 
@@ -461,6 +461,11 @@ class KeyboardTyper:
             for key in keys:
                 if key in key_map:
                     pynput_keys.append(key_map[key])
+                elif len(key) == 1:
+                    # Same XTEST-vs-XSendEvent issue as _type_char: a bare
+                    # character would be sent via XSendEvent and ignored by
+                    # GTK4 apps, so ctrl+z would arrive as a lone ctrl.
+                    pynput_keys.append(self._char_key(key))
                 else:
                     pynput_keys.append(key)
             
@@ -500,6 +505,24 @@ class KeyboardTyper:
         '\t': Key.tab,
     }
     
+    @staticmethod
+    def _char_key(char: str) -> KeyCode:
+        """
+        Build a KeyCode carrying an explicit vk (X keysym) for a character.
+
+        pynput's X11 backend picks its injection mechanism per key: a KeyCode
+        with vk set is sent via XTEST fake_input, while one without falls back
+        to XSendEvent.  GTK4 applications (Ghostty) discard XSendEvent key
+        events as forged, so characters typed the default way never arrive --
+        only Key.* constants (space, enter, tab), which carry a vk, get
+        through.  Supplying the keysym forces every character onto XTEST.
+
+        For printable ASCII the X keysym equals the code point; other
+        codepoints use the Unicode keysym offset.
+        """
+        cp = ord(char)
+        return KeyCode.from_vk(cp if cp < 0x80 else 0x01000000 + cp)
+
     def _type_char(self, char: str):
         """
         Type a single character using explicit press/release.
@@ -522,7 +545,7 @@ class KeyboardTyper:
                     time.sleep(self.key_hold_s)
                 self.controller.release(key)
             elif char in self.SHIFTED_CHAR_MAP:
-                base_key = self.SHIFTED_CHAR_MAP[char]
+                base_key = self._char_key(self.SHIFTED_CHAR_MAP[char])
                 self.controller.press(Key.shift)
                 time.sleep(0.005)  # Small delay to ensure shift is registered
                 self.controller.press(base_key)
@@ -533,12 +556,13 @@ class KeyboardTyper:
                 self.controller.release(Key.shift)
             elif char.isupper() and char.isalpha():
                 # Uppercase letters also need explicit Shift
+                base_key = self._char_key(char.lower())
                 self.controller.press(Key.shift)
                 time.sleep(0.005)
-                self.controller.press(char.lower())
+                self.controller.press(base_key)
                 if self.key_hold_s > 0:
                     time.sleep(self.key_hold_s)
-                self.controller.release(char.lower())
+                self.controller.release(base_key)
                 time.sleep(0.005)
                 self.controller.release(Key.shift)
             elif char == ' ':
@@ -547,10 +571,11 @@ class KeyboardTyper:
                     time.sleep(self.key_hold_s)
                 self.controller.release(Key.space)
             else:
-                self.controller.press(char)
+                key = self._char_key(char)
+                self.controller.press(key)
                 if self.key_hold_s > 0:
                     time.sleep(self.key_hold_s)
-                self.controller.release(char)
+                self.controller.release(key)
             
             if self.typing_delay_s > 0:
                 time.sleep(self.typing_delay_s)

@@ -14,6 +14,9 @@ shortcuts:
   # buffer_until_release: true  # hold transcription output until key release (no-op without push_to_talk)
   # Delay (ms) after releasing PTT before typing begins (debounce for key-release events)
   ptt_release_delay_ms: 250
+  # Poll NumLock as a persistent listening latch (same as "work activate", not PTT).
+  # numlock_persistent: true
+  # numlock_listening_when: "off"  # NumLock off / blue LED = listening (quote off; YAML otherwise treats it as false)
 
 # Keyboard typing configuration
 keyboard:

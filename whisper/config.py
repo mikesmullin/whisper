@@ -19,6 +19,8 @@ DEFAULT_CONFIG = {
         "toggle_listening": "ctrl+shift+space",
         "push_to_talk": False,
         "buffer_until_release": True,
+        "numlock_persistent": False,
+        "numlock_listening_when": "on",
     },
     "keyboard": {
         "typing_delay_ms": 20,
@@ -171,6 +173,22 @@ class Config:
     def toggle_listening_clipboard_shortcut(self) -> str | None:
         """Get clipboard-paste mode toggle listening hotkey, or None if not configured"""
         return self.get('shortcuts.toggle_listening_clipboard', None)
+
+    @property
+    def numlock_persistent(self) -> bool:
+        """Poll NumLock as a persistent listening latch (same as work activate)."""
+        return bool(self.get('shortcuts.numlock_persistent', False))
+
+    @property
+    def numlock_listening_when(self) -> str:
+        """Which NumLock level means persistent listening: 'on' or 'off'."""
+        value = self.get('shortcuts.numlock_listening_when', 'on')
+        if value is False:
+            return 'off'
+        if value is True:
+            return 'on'
+        text = str(value).lower()
+        return 'off' if text in ('off', 'inverted', 'false', '0') else 'on'
     
     @property
     def typing_delay_ms(self) -> int:

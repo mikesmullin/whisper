@@ -18,6 +18,7 @@ from pathlib import Path
 
 from whisper.config import Config
 from whisper.keyboard_output import KeyboardTyper
+from whisper.numlock import NumLockMonitor
 from whisper.perception_client import PerceptionVoiceClient
 from whisper.sound import SoundPlayer
 
@@ -42,6 +43,10 @@ class VoiceKeyboard:
         self.is_listening = False
         self._clipboard_mode = False  # set by alt+space hotkey; cleared by ctrl+shift+space
         self._keyword_activated = False  # True when listening was started via activation keyword
+        self._ptt_held = False  # True while a push-to-talk combo is physically held
+        self._numlock_activated = False  # True while the NumLock latch is holding listening on
+        self._numlock_forced: bool | None = None  # commanded NumLock level until X catches up
+        self._numlock = NumLockMonitor()
         
         # Timestamp tracking for logging
         self.start_time = time.time()
@@ -135,6 +140,7 @@ class VoiceKeyboard:
                         for key_set, clipboard_mode in ptt_configs:
                             if key_set <= _pressed:
                                 _active_combo[0] = key_set
+                                self._ptt_held = True
                                 self._clipboard_mode = clipboard_mode
                                 self.start_listening()
                                 break
@@ -143,6 +149,7 @@ class VoiceKeyboard:
                     canonical = _ptt_listener.canonical(key)
                     if _active_combo[0] and canonical in _active_combo[0]:
                         _active_combo[0] = None
+                        self._ptt_held = False
                         if not self._keyword_activated:
                             self.stop_listening(flush_buffer=self.config.buffer_until_release)
                     _pressed.discard(canonical)
@@ -341,13 +348,16 @@ class VoiceKeyboard:
                 self._clipboard_mode = False
                 self._keyword_activated = True
                 self.start_listening()
+                self._write_numlock_for_persistent(True)
             elif action == 'LISTENING_OFF':
                 self._keyword_activated = False
                 self.stop_listening()
+                self._write_numlock_for_persistent(False)
             elif action == 'LISTENING_TOGGLE':
                 self._clipboard_mode = False
                 self._keyword_activated = not self.is_listening
                 self.toggle_listening()
+                self._write_numlock_for_persistent(self._keyword_activated)
             elif action == 'LISTENING_ON_CLIPBOARD':
                 self._clipboard_mode = True
                 self._keyword_activated = True
@@ -359,6 +369,71 @@ class VoiceKeyboard:
         else:
             # Treat as shell command (same as command_mappings)
             self._run_command_mapping(spoken_phrase, action)
+
+    def _want_numlock_persistent(self, numlock_on: bool) -> bool:
+        """Map NumLock level to persistent listening, honoring inverted polarity."""
+        if self.config.numlock_listening_when == 'off':
+            return not numlock_on
+        return numlock_on
+
+    def _effective_numlock_on(self) -> bool | None:
+        """NumLock level, preferring a just-commanded value until X catches up."""
+        actual = self._numlock.is_on()
+        if self._numlock_forced is not None:
+            if actual is None or actual != self._numlock_forced:
+                return self._numlock_forced
+            self._numlock_forced = None
+        return actual
+
+    def _set_numlock_on(self, want_on: bool):
+        """Tap NumLock only if the latch does not already match want_on."""
+        actual = self._numlock.is_on()
+        if actual is not None and actual == want_on:
+            self._numlock_forced = None
+            return
+
+        try:
+            from pynput.keyboard import Key
+            self.typer.controller.press(Key.num_lock)
+            self.typer.controller.release(Key.num_lock)
+            self._numlock_forced = want_on
+        except Exception as e:
+            logger.warning(f"Could not set NumLock to {'on' if want_on else 'off'}: {e}")
+
+    def _write_numlock_for_persistent(self, persistent: bool):
+        """Drive the NumLock LED/latch to match persistent listening."""
+        if not self.config.numlock_persistent:
+            return
+        want_on = not persistent if self.config.numlock_listening_when == 'off' else persistent
+        self._set_numlock_on(want_on)
+        self._numlock_activated = persistent
+
+    def _sync_persistent_from_numlock(self):
+        """Follow the NumLock latch as a work-activate style persistent mode."""
+        if not self.config.numlock_persistent:
+            return
+
+        numlock_on = self._effective_numlock_on()
+        if numlock_on is None:
+            return
+
+        want = self._want_numlock_persistent(numlock_on)
+        if want:
+            if not self._numlock_activated:
+                if not self.perception_client.is_server_running():
+                    return
+                self._clipboard_mode = False
+                self.start_listening()
+                if self.is_listening:
+                    self._numlock_activated = True
+                    self._keyword_activated = True
+                    self.log("🔢 NumLock latch: listening on")
+        elif self._numlock_activated:
+            self._numlock_activated = False
+            self._keyword_activated = False
+            if not self._ptt_held:
+                self.stop_listening()
+            self.log("🔢 NumLock latch: listening off")
 
     def _word_sfx_loop(self):
         """Drain word-sfx shot queue, playing one shot per buffer append."""
@@ -432,6 +507,7 @@ class VoiceKeyboard:
         
         while not self._polling_stop_event.is_set():
             try:
+                self._sync_persistent_from_numlock()
                 transcriptions = self.perception_client.get_transcriptions()
                 output_ready = self.is_listening and time.time() >= self._output_enabled_at
                 
@@ -482,6 +558,10 @@ class VoiceKeyboard:
         if self.hotkey_listener:
             self.hotkey_listener.start()
             self.log(f"✓ Hotkey enabled: {self.config.toggle_listening_shortcut}")
+
+        if self.config.numlock_persistent:
+            when = self.config.numlock_listening_when
+            self.log(f"✓ NumLock latch enabled (NumLock {when} = listening)")
         
         if self.verbose:
             self.log("🎙️  Ready! Press hotkey to toggle listening... (Ctrl+C to quit)")
@@ -513,6 +593,8 @@ class VoiceKeyboard:
         # Stop hotkey listener
         if self.hotkey_listener:
             self.hotkey_listener.stop()
+
+        self._numlock.close()
         
         # Stop keyboard typer
         if self.typer:

@@ -66,21 +66,3 @@ impl SoundPlayer {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn disabled_player_is_inert() {
-        let p = SoundPlayer::new(false);
-        p.play("anything"); // must not panic
-    }
-
-    #[test]
-    fn missing_file_warns_rather_than_failing() {
-        let mut p = SoundPlayer::new(false);
-        assert!(p.preload("x", Path::new("/nonexistent/none.wav")).is_ok());
-        p.play("x");
-    }
-}

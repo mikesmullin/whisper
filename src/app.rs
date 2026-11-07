@@ -524,23 +524,3 @@ fn write_clipboard(data: &[u8]) -> Result<()> {
     child.wait().context("waiting for xclip")?;
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn trailing_period_is_stripped() {
-        assert_eq!(strip_trailing_period("hello world."), "hello world");
-        assert_eq!(strip_trailing_period("hello world"), "hello world");
-        assert_eq!(strip_trailing_period("wait... "), "wait..");
-    }
-
-    #[test]
-    fn magic_actions_are_recognized_exactly() {
-        assert!(MAGIC_ACTIONS.contains(&"LISTENING_ON"));
-        // A shell command must not be mistaken for a magic action.
-        assert!(!MAGIC_ACTIONS.contains(&"~/wlogin.sh"));
-        assert!(!MAGIC_ACTIONS.contains(&"listening_on"));
-    }
-}

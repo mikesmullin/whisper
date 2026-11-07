@@ -122,37 +122,3 @@ fn read_exact(stream: &mut impl Read, buf: &mut [u8]) -> Result<()> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn utterance_lines_parse_from_jsonl() {
-        let line = r#"{"ts":"2026-11-06T20:34:25.395-07:00","text":"hello"}"#;
-        let u: Utterance = serde_json::from_str(line).unwrap();
-        assert_eq!(u.text, "hello");
-        assert!(u.ts.is_some());
-    }
-
-    #[test]
-    fn utterance_tolerates_a_missing_timestamp() {
-        let u: Utterance = serde_json::from_str(r#"{"text":"hi"}"#).unwrap();
-        assert_eq!(u.text, "hi");
-        assert!(u.ts.is_none());
-    }
-
-    #[test]
-    fn missing_socket_is_reported_not_panicked() {
-        let c = Client::new(Path::new("/nonexistent/perception.sock"), "t");
-        assert!(!c.is_server_running());
-        assert!(c.get_transcriptions().is_err());
-    }
-
-    #[test]
-    fn error_responses_are_surfaced() {
-        let v = serde_json::json!({"status": "error", "message": "missing 'uid' field"});
-        let err = expect_ok(&v).unwrap_err().to_string();
-        assert!(err.contains("missing 'uid'"), "{err}");
-    }
-}

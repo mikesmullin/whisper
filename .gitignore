@@ -2,3 +2,17 @@
 /config.yaml
 *.sock
 tmp/
+
+# Leftovers from the v1/v2 Python implementations (still on those branches).
+# Listed explicitly because a stray `git add -A` here otherwise sweeps them
+# into the Rust repo -- which is exactly what happened once in perception-voice.
+/build/
+/lib/
+/whisper/
+/whisper.egg-info/
+/tests/
+/uv.lock
+/PROMPT.md
+__pycache__/
+*.pyc
+.venv/

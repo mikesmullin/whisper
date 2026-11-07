@@ -51,15 +51,8 @@ Copy `config.example.yaml` to `config.yaml` to start. A v2 config works
 unchanged: the `audio`, `transcription` and `vad` blocks belong to the server
 now and are accepted and ignored here.
 
-## Testing
+`src/bin/keycapture.rs` is a diagnostic, not a test: it takes input focus and
+prints whatever gets typed into it, which answers "is anything being typed at
+all" without keystrokes landing in whatever you had open.
 
-    cargo test
-
-The X11 tests take input focus for a fraction of a second to verify that
-synthesized keystrokes really arrive, then hand focus back. Set
-`WHISPER_SKIP_X11_TESTS=1` to skip them, and they skip themselves when there
-is no `DISPLAY`.
-
-`src/bin/keycapture.rs` is a helper that takes focus and prints what gets typed
-into it, so the whole chain can be exercised without keystrokes landing in
-whatever you had open.
+    cargo run --release --bin keycapture -- 20

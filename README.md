@@ -4,7 +4,7 @@ A voice keyboard that types what you say.
 
 | Version | Implementation |
 |---------|----------------|
-| `v3` / `rust` | Rust client: X11 XTEST typing, no runtime deps (this branch) |
+| `v3` (default) | Rust client: X11 XTEST typing, no runtime deps (this branch) |
 | `v2` | Python client; delegates STT to perception-voice |
 | `v1` | Standalone Python with a built-in Whisper model (GPU required) |
 

@@ -1,183 +1,102 @@
-# Whisper Voice Keyboard Configuration
-# Place this file at ~/.whisper.yaml to customize settings
+# whisper v2 configuration
 
-audio:
-  # Sample rate for audio capture (Hz)
-  sample_rate: 16000
-  
-  # Audio buffer size (samples per chunk)
-  # Silero VAD requires at least 512 samples, WebRTC uses first 480
-  buffer_size: 512
-  
-  # Microphone device index (null for auto-detect, uses system default)
-  # For Linux/PulseAudio: Set system default with 'pactl set-default-source <device>'
-  # For Windows/macOS: Configure in system sound settings
-  mic_device: null
-  
-  # Minimum duration of speech to transcribe (seconds)
-  min_utterance_duration: 1.1
-  
-  # Silence duration before finalizing transcription (seconds)
-  # Lower = faster completion, but may cut off speech
-  post_speech_silence_duration: 0.6
-  
-  # Buffer duration before speech detection (seconds)
-  # Captures audio before VAD detects speech onset
-  pre_recording_buffer_duration: 1.0
+# Path to perception-voice server socket (relative to this file, or absolute)
+perception_voice:
+  socket_path: "tmp/perception-voice/perception.sock"
 
-transcription:
-  # Main model for final accurate transcription
-  # Options: tiny, tiny.en, base, base.en, small, small.en, medium, medium.en, large-v2, large-v3
-  # Larger models are more accurate but slower
-  model: "large-v3"
-  
-  # Realtime preview model (fast, lower accuracy)
-  # Use tiny/tiny.en for instant feedback
-  realtime_model: "tiny.en"
-  
-  # Compute device: "cpu" or "cuda" (for GPU acceleration)
-  # Use "cuda" if you have an NVIDIA GPU with CUDA support
-  device: "cuda"
-  
-  # Compute type: "int8" (CPU, fastest), "float16" (GPU, recommended), "float32" (highest quality)
-  # Use float16 for GPU, int8 for CPU
-  compute_type: "float16"
-  
-  # Beam size for main model (higher = more accurate, slower)
-  beam_size: 5
-  
-  # Beam size for realtime model (lower = faster)
-  beam_size_realtime: 3
-  
-  # Language code (e.g., "en", "es", "fr", "de", "zh")
-  # Set to null for auto-detection
-  language: "en"
-  
-  # Enable realtime transcription preview
-  # Shows words as you speak, then refines with final transcription
-  enable_realtime_transcription: true
-  
-  # Interval between realtime updates (seconds)
-  # Lower = more frequent updates, higher CPU usage
-  realtime_processing_pause: 0.02
-  
-  # Type realtime preview to keyboard (false = only show in stdout)
-  # When true, preview is typed and corrected with backspaces (can be distracting)
-  # When false, only final transcription is typed to keyboard
-  type_realtime_preview: false
-
-vad:
-  # Voice Activity Detection settings
-  
-  # WebRTC sensitivity (0-3, higher = less sensitive to noise)
-  # Use 3 for noisy environments, 1 for quiet environments
-  webrtc_sensitivity: 3
-  
-  # Silero sensitivity (0.0-1.0, lower = more sensitive)
-  # Lower values catch quieter speech but may have false positives
-  silero_sensitivity: 0.05
-  
-  # Use ONNX for faster Silero inference on CPU
-  silero_use_onnx: true
-
+# Hotkeys to toggle listening on/off
 shortcuts:
-  # Toggle listening on/off
-  # Hotkey combination to start/stop listening
-  # Examples: "ctrl+shift+space", "ctrl+alt+l", "alt+space"
-  # Single press: toggle ON/OFF
-  # Double press (within 1 second): rotate mode (LISTEN ↔ AGENT)
+  # sendkeys mode: transcription is typed character-by-character
   toggle_listening: "ctrl+shift+space"
+  # clipboard mode: transcription is written to clipboard then pasted via Ctrl+V
+  toggle_listening_clipboard: "alt+space"
+  # push_to_talk: false  # when true: hold key to listen, release to stop
+  # buffer_until_release: true  # hold transcription output until key release (no-op without push_to_talk)
+  # Delay (ms) after releasing PTT before typing begins (debounce for key-release events)
+  ptt_release_delay_ms: 250
+  # Poll NumLock as a persistent listening latch (same as "work activate", not PTT).
+  # numlock_persistent: true
+  # numlock_listening_when: "off"  # NumLock off / blue LED = listening (quote off; YAML otherwise treats it as false)
 
-agent:
-  # Agent mode: transcribe speech to shell commands instead of keyboard
-  # Enable/disable agent mode functionality
-  enabled: true
-  
-  # Default shell command template when no exact match found
-  # $PROMPT = full transcribed text, $AGENT = first word (normalized: trim, lowercase, alphanumeric)
-  #default_command: 'subd -v -l 1 -t "mini-$AGENT" "$PROMPT"'
-  default_command: 'subd -v -l 1 -t "$AGENT" "$PROMPT"'
-
-  # Exact-match commands: spoken phrase -> shell command
-  # Phrases are normalized (trimmed, lowercased, alphanumeric only) before matching
-  # If no exact match is found, falls back to default_command
-  commands:
-    # Example: saying "home lights blue" executes `subd -t home turn all lights blue`
-    # "home lights blue": "subd -t home turn all lights blue"
-  
-  # Seconds of silence before buffered text is sent to the command
-  # Text is accumulated until this timeout, then the command is executed
-  buffer_timeout: 0.5
-  
-  # Seconds within which a second hotkey press counts as a double-tap
-  # Double-tap rotates between LISTEN and AGENT modes
-  double_tap_window: 0.5
-
+# Keyboard typing configuration
 keyboard:
-  # Delay between each keystroke in milliseconds
-  # Prevents skipping keys in some terminal inputs
-  # Increase if keys are being dropped
-  typing_delay_ms: 10
-  
-  # Key hold duration in milliseconds (time between press and release)
-  # For SDL2/game input compatibility
-  key_hold_ms: 20
-  
-  # Phrases to discard (commonly misheard sounds like coughs/sneezes)
-  # These are normalized (lowercase, stripped) before comparison
-  # Add any phrases that Whisper often misinterprets from non-speech sounds
+  # Milliseconds delay between each keystroke (prevents skipping in some input contexts)
+  # 4ms works well for USB HID gadget (Orange Pi kvm-server); increase if keys are dropped
+  typing_delay_ms: 4
+  # Milliseconds to hold key down before release (for SDL2/game input compatibility)
+  key_hold_ms: 4
+  # Phrases to discard (misheard sounds like coughs/sneezes)
   discard_phrases:
-  - "thank you"
+    - "thank you"
 
+# Word mappings: spoken words -> keyboard output
+# Can be text replacements or hotkeys (format: "ctrl+z")
 word_mappings:
-  # Map spoken words to keyboard output
-  # When you say these words, they'll be replaced with the specified text
-  # All mappings are case-insensitive
-  
-  # Line breaks
-  new line: "\n"
-  
-  # Formatting
-  insert bullet: "- "
-  completion: "\t"
-  
-  # Punctuation (say these to insert punctuation)
-  end of sentence: "."
-  dot: "."
-  comma: ","
-  question mark: "?"
-  exclamation point: "!"
-  colon: ":"
-  semicolon: ";"
-  
-  # Hotkeys (execute keyboard shortcuts)
-  now undo: "ctrl+z"
-  now redo: "ctrl+y"
-  now copy: "ctrl+c"
-  now paste: "ctrl+v"
-  now cut: "ctrl+x"
-  now save: "ctrl+s"
-  
-  # Add your own custom mappings below:
-  # new paragraph: "\n\n"
-  # select all: "ctrl+a"
-  # find: "ctrl+f"
-  # my email: "your.email@example.com"
+  "new line": "\n"
+  "insert bullet": "- "
+  "completion": "\t"
 
+  # Placeholders: {{clipboard}} is replaced with the current clipboard
+  # contents (read via xclip) at the moment the mapping is spoken.
+  "insert citation": "- {{clipboard}}:"
+
+  "end of sentence": "."
+  "dot": "."
+  "comma": ","
+  "question mark": "?"
+  "exclamation point": "!"
+  "colon": ":"
+  "semicolon": ";"
+  # Hotkeys (will be executed as keyboard shortcuts)
+  "now undo": "ctrl+z"
+  "now redo": "ctrl+y"
+  "now copy": "ctrl+c"
+  "now paste": "ctrl+v"
+  "now cut": "ctrl+x"
+  "now save": "ctrl+s"
+
+# Command mappings: exact spoken phrases -> shell commands
+# Matching lowercases and strips non-letters down to word separators before comparison.
+# These run only when the full buffered phrase exactly matches after a pause.
+#
+# Wildcard (*) support: use * to capture any words spoken after the prefix.
+# The captured words are substituted wherever $WORDS appears in the command.
+# Example: saying "home agent turn the lights blue" runs the command with
+#   $WORDS = "turn the lights blue"
+command_mappings:
+  "work password": "~/wlogin.sh"
+  "work duo": "~/duo.sh"
+  # "home agent *": cd /workspace/agl && bun src/agents/home.mjs "$WORDS"
+
+# Activation keywords: always-on phrases checked even when listening is OFF.
+# Values can be magic strings or shell commands.
+#
+# Magic strings:
+#   LISTENING_ON               - start listening (sendkeys mode)
+#   LISTENING_OFF              - stop listening
+#   LISTENING_TOGGLE           - toggle listening (sendkeys mode)
+#   LISTENING_ON_CLIPBOARD     - start listening (clipboard-paste mode)
+#   LISTENING_TOGGLE_CLIPBOARD - toggle listening (clipboard-paste mode)
+#
+# activation_keywords:
+#   "work activate": LISTENING_ON
+#   "work deactivate": LISTENING_OFF
+#   "work clipboard": LISTENING_ON_CLIPBOARD
+
+# Sound effects
 sounds:
-  # Enable/disable sound playback
   enabled: true
-  
-  # Sound file to play when listening starts (hotkey pressed)
-  on_listening_start: "sfx/on.wav"
-  
-  # Sound file to play when listening stops (hotkey pressed)
-  on_listening_stop: "sfx/off.wav"
+  on_listening_start: "sfx/squelch-on.wav"
+  on_listening_stop: "sfx/click-off.wav"
+  # Delay (ms) after hotkey press before resuming/pausing audio polling
+  listening_state_delay_ms: 50
 
+# Polling interval for checking perception-voice server (ms)
+# Lower = less latency between transcription finishing and text appearing
+polling:
+  interval_ms: 25
+
+# Logging
 logging:
-  # Add timestamps to console output for performance monitoring
-  # Format: "1.234s Message"
   timestamps: true
-  
-  # Enable verbose logging
   verbose: false

@@ -1,32 +1,35 @@
-# whisper systemd user service
+# whisper (Rust) systemd user service
 #
 # Installation:
-#   1. Copy this file to ~/.config/systemd/user/whisper.service
-#   2. Edit the ExecStart path to match your installation
-#   3. Enable and start:
-#      systemctl --user daemon-reload
-#      systemctl --user enable whisper
-#      systemctl --user start whisper
+#   1. cargo build --release
+#   2. Copy this file to ~/.config/systemd/user/whisper.service
+#   3. systemctl --user daemon-reload && systemctl --user restart whisper
 #
 # View logs:
 #   journalctl --user -u whisper -f
 
 [Unit]
-Description=Whisper - Voice Keyboard
+Description=Whisper - Voice Keyboard (Rust)
 Documentation=https://github.com/mikesmullin/whisper
-# After= (not just Wants=) matters: on a joint restart whisper otherwise
-# races ahead of the server and spams "Server socket not found" at the
-# polling interval until the socket appears.
+# After= (not just Wants=) matters: on a joint restart the keyboard otherwise
+# races ahead of the server and logs connection failures at the polling
+# interval until the socket appears. It recovers either way; this keeps the
+# journal honest.
 After=perception-voice.service graphical-session.target
 Wants=perception-voice.service
 
 [Service]
 Type=simple
-Environment=PATH=%h/.bun/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/bash -lc '%h/.local/bin/whisper'
+WorkingDirectory=/workspace/whisper
+ExecStart=/workspace/whisper/target/release/whisper
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=10s
+
+# X11 access for XTEST keystroke synthesis and the NumLock latch. Without
+# these the service starts and then cannot type anything.
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=%h/.Xauthority
 
 [Install]
 WantedBy=default.target

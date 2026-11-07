@@ -1,155 +1,65 @@
-# 👄 Whisper v2
+# 👄 whisper v3
 
-A voice keyboard that transcribes Speech-to-Text (STT) for dictation.
+A voice keyboard that types what you say.
 
-| Version | Description |
-|---------|-------------|
-| [v2](https://github.com/mikesmullin/whisper/tree/v2) | Lightweight keyboard client; delegates STT to perception-voice server |
-| [v1](https://github.com/mikesmullin/whisper/tree/v1) | Standalone voice keyboard with built-in Whisper AI model (GPU required) |
+| Version | Implementation |
+|---------|----------------|
+| `v3` / `rust` | Rust client: X11 XTEST typing, no runtime deps (this branch) |
+| `v2` | Python client; delegates STT to perception-voice |
+| `v1` | Standalone Python with a built-in Whisper model (GPU required) |
 
-## ✨ Features
+## What it does
 
-- **🎯 Voice-to-Keyboard**: Speaks directly into any application as typed text
-- **🪶 Lightweight**: No GPU required; delegates STT to perception-voice server
-- **⌨️ Configurable Commands**: Map spoken words to keyboard shortcuts
-- **🔊 Audio Feedback**: Sound effects for listening state changes
-- **📝 Word Mappings**: Convert spoken commands to actions (e.g., "new line" → newline)
-- **🚫 Cancellation**: Press hotkey to discard pending transcription before it types
+Polls [perception-voice](https://github.com/mikesmullin/perception-voice) for
+finished utterances and types them into whatever window has focus, as real key
+events. On top of plain dictation:
 
-## 🎯 Use Cases
+- **word mappings** — `"new line"` → `\n`, `"now undo"` → `ctrl+z`
+- **command mappings** — spoken phrases run shell commands, with `*` wildcards
+  and `$WORDS` capture
+- **activation keywords** — hands-free `"work activate"` / `"work deactivate"`,
+  checked even while listening is off
+- **clipboard-paste mode** — for text that must arrive atomically
+- **NumLock latch** — a persistent listening mode rather than push-to-talk
+- **discard phrases** — drops the sounds models hallucinate from coughs
 
-- **Accessibility**: Hands-free typing for users with mobility challenges
-- **Productivity**: Dictate documents, emails, and messages
-- **Content Creation**: Speed up writing workflows
-- **Note-Taking**: Capture thoughts quickly during meetings or brainstorming
+## Why Rust
 
-## 📋 Requirements
+The v2 Python client started in about a second and pulled in pygame and pynput;
+this is a single static binary that starts in milliseconds. Nothing about the
+*behaviour* needed changing — the mapping semantics are carried over
+deliberately, down to the trailing-space rule — so the win is startup, memory,
+and having no interpreter in the dictation path.
 
-- Python 3.11+
-- [perception-voice](https://github.com/mikesmullin/perception-voice) server
-- Linux with X11 (for keyboard simulation)
+Typing goes through XTEST rather than `XSendEvent`: synthetic events carry a
+`send_event` flag that VS Code and most toolkits ignore. Characters the current
+layout cannot reach are typed by briefly rebinding a spare keycode, which is
+what xdotool and pynput do too.
 
-## 🚀 Installation
+## Requirements
 
-Using `uv`:
+- Linux with X11 (Wayland is not supported: XTEST and key grabs are X11)
+- a running perception-voice server
+- `xclip`, for clipboard-paste mode and the `{{clipboard}}` placeholder
 
-```bash
-uv tool install --editable .
-```
+## Build and run
 
-## 🚀 Quick Start
+    cargo build --release
+    ./target/release/whisper            # reads ./config.yaml, then ~/.whisper.yaml
 
-### 1. Start perception-voice server
+Copy `config.example.yaml` to `config.yaml` to start. A v2 config works
+unchanged: the `audio`, `transcription` and `vad` blocks belong to the server
+now and are accepted and ignored here.
 
-```bash
-cd tmp/perception-voice
-perception-voice serve
-```
+## Testing
 
-### 2. Start whisper
+    cargo test
 
-```bash
-whisper
-```
+The X11 tests take input focus for a fraction of a second to verify that
+synthesized keystrokes really arrive, then hand focus back. Set
+`WHISPER_SKIP_X11_TESTS=1` to skip them, and they skip themselves when there
+is no `DISPLAY`.
 
-### 3. Use it
-
-1. Press **Ctrl+Shift+Space** to start listening (you'll hear a sound)
-2. Speak into your microphone
-3. Watch the text appear in the active window
-4. Press **Ctrl+Shift+Space** to stop listening
-
-## 🚫 Cancellation
-
-If you start speaking but change your mind:
-- Press the hotkey **before** the transcription completes
-- Any pending text will be discarded instead of typed
-
-## ⚙️ Configuration
-
-Edit `config.yaml` to customize:
-
-```yaml
-# Path to perception-voice socket
-perception_voice:
-  socket_path: "tmp/perception-voice/perception.sock"
-
-# Hotkey to toggle listening
-shortcuts:
-  toggle_listening: "ctrl+shift+space"
-
-# Exact-match command mappings
-command_mappings:
-  "work password": "~/wlogin.sh"
-
-# Word mappings
-word_mappings:
-  "new line": "\n"
-  "now undo": "ctrl+z"
-  "now save": "ctrl+s"
-  # ... see config.yaml for more
-```
-
-## 🔧 Systemd Integration
-
-Install as a user service:
-
-```bash
-# Copy service file
-cp whisper.service ~/.config/systemd/user/
-
-# Edit paths in the service file
-nano ~/.config/systemd/user/whisper.service
-
-# Enable and start
-systemctl --user daemon-reload
-systemctl --user enable whisper
-systemctl --user start whisper
-```
-
-**Note**: `whisper.service` depends on `perception-voice.service`. Make sure perception-voice is also set up as a systemd service.
-
-## 📖 CLI Reference
-
-```bash
-whisper [-v] [-c CONFIG]
-```
-
-| Option | Description |
-|--------|-------------|
-| `-v, --verbose` | Enable verbose logging |
-| `-c, --config FILE` | Path to config file (default: config.yaml) |
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  perception-voice serve                         │
-│  (Runs Whisper AI model on GPU, transcribes audio)              │
-│                         │                                       │
-│               Unix Socket (IPC)                                 │
-└─────────────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       whisper v2                                 │
-│  ┌─────────────┐   ┌──────────────┐   ┌───────────────────────┐ │
-│  │ Hotkey      │─▶│ Poll Server  │─▶│ Type to Keyboard      │ │
-│  │ Listener    │   │ for Text     │   │ (with word mappings)  │ │
-│  └─────────────┘   └──────────────┘   └───────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-               ┌─────────────────┐
-               │ Active Window   │
-               │ (VS Code, etc.) │
-               └─────────────────┘
-```
-
-## 🙏 Acknowledgments
-
-- [OpenAI Whisper](https://github.com/openai/whisper) for speech recognition
-- [faster-whisper](https://github.com/guillaumekln/faster-whisper) for optimized inference
-- [Silero VAD](https://github.com/snakers4/silero-vad) for voice activity detection
-- [pynput](https://github.com/moses-palmer/pynput) for keyboard control
-- [perception-voice](https://github.com/mikesmullin/perception-voice) for shared STT service
+`src/bin/keycapture.rs` is a helper that takes focus and prints what gets typed
+into it, so the whole chain can be exercised without keystrokes landing in
+whatever you had open.

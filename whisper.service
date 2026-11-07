@@ -18,6 +18,14 @@ Documentation=https://github.com/mikesmullin/whisper
 After=perception-voice.service graphical-session.target
 Wants=perception-voice.service
 
+# Startup is now sub-second, which makes systemd's default start limit (5
+# starts per 10s) easy to trip just by restarting a few times in a row by
+# hand -- and hitting it puts the unit in `failed`, which looks far worse
+# than whatever prompted the restarts. Widened enough to allow a burst of
+# manual restarts while still catching a genuine crash loop.
+StartLimitIntervalSec=30
+StartLimitBurst=15
+
 [Service]
 Type=simple
 WorkingDirectory=/workspace/whisper
